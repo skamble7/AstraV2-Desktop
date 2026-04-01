@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASTRA — Skill-Based Architecture Diagrams</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --brand:#4F46E5; --brand-light:#E0E7FF; --accent:#0EA5E9; --accentLight:#E0F2FE;
+    --green:#059669; --greenLight:#D1FAE5; --amber:#D97706; --amberLight:#FEF3C7;
+    --slate:#64748B; --ink:#1A1A2E; --bg:#F8FAFC; --card:#FFFFFF; --border:#E2E8F0;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--brand); color:white; padding:28px 48px; border-bottom:4px solid #3730A3; }
+  header h1 { font-size:28px; font-weight:700; margin-bottom:4px; }
+  header p  { font-size:14px; opacity:0.8; }
+  nav { background:var(--card); border-bottom:1px solid var(--border); padding:0 48px; display:flex; gap:4px; overflow-x:auto; }
+  nav a { display:block; padding:14px 16px; font-size:13px; font-weight:600; color:var(--slate); text-decoration:none; border-bottom:3px solid transparent; white-space:nowrap; }
+  nav a:hover { color:var(--brand); border-bottom-color:var(--brand-light); }
+  main { max-width:1100px; margin:0 auto; padding:40px 48px 80px; }
+  .diagram-section { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:36px; margin-bottom:40px; scroll-margin-top:80px; }
+  .diagram-section h2 { font-size:20px; font-weight:700; color:var(--brand); margin-bottom:8px; }
+  .diagram-section p  { font-size:14px; color:var(--slate); margin-bottom:24px; line-height:1.6; }
+  .diagram-wrap { background:#FAFBFF; border:1px solid var(--border); border-radius:8px; padding:24px; overflow-x:auto; }
+  .label { font-family:'Courier New',monospace; font-size:11px; color:var(--slate); background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:2px 8px; display:inline-block; margin-bottom:12px; }
+  .note { margin-top:16px; padding:12px 16px; border-left:4px solid var(--accent); background:#F0F9FF; border-radius:0 6px 6px 0; font-size:13px; color:var(--slate); line-height:1.5; }
+  .intro { background:var(--brand-light); border:1px solid #C7D2FE; border-radius:12px; padding:28px 36px; margin-bottom:40px; }
+  .intro h2 { font-size:18px; color:var(--brand); margin-bottom:8px; }
+  .intro p  { font-size:14px; color:var(--slate); line-height:1.7; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>ASTRA — Skill-Based Architecture Diagrams</h1>
+  <p>Branch: feature/skill-based-architecture &nbsp;|&nbsp; March 2026 &nbsp;|&nbsp; Skills and capabilities coexist. New Electron frontend for skills. VSCode extension unchanged for capabilities.</p>
+</header>
+
+<nav>
+  <a href="#coexistence">Coexistence Model</a>
+  <a href="#topology">Service Topology</a>
+  <a href="#agent">Astra Agent</a>
+  <a href="#intent-run">Intent-Driven Run</a>
+  <a href="#pack-run">Pack-Driven Run</a>
+  <a href="#skill-anatomy">Skill Anatomy</a>
+  <a href="#seed">Seed Strategy</a>
+  <a href="#build">Build Phases</a>
+</nav>
+
+<main>
+
+<div class="intro">
+  <h2>About these diagrams</h2>
+  <p>
+    Skills (<strong>sk.*</strong>) and capabilities (<strong>cap.*</strong>) coexist in ASTRA.
+    Neither replaces the other. A new <strong>Electron desktop app</strong> serves as the frontend
+    for the skill path, powered by the <strong>Astra Agent</strong> (TypeScript, in-process).
+    The <strong>VSCode extension</strong> continues unchanged, handling capabilities only.
+    Artifact kinds (<strong>cam.*</strong>), workspace management, and artifact storage are
+    shared between both paths.
+  </p>
+</div>
+
+<!-- 1. Coexistence Model -->
+<section class="diagram-section" id="coexistence">
+  <h2>1. Coexistence Model</h2>
+  <p>Skills and capabilities are parallel execution primitives sharing the same backend infrastructure for artifacts, workspaces, and runs.</p>
+  <div class="diagram-wrap">
+    <span class="label">coexistence-model.mermaid</span>
+    <div class="mermaid">
+flowchart TB
+  subgraph SHARED["Shared Infrastructure"]
+    AS["artifact-service :9020\n(kind registry)"]
+    WM["workspace-manager-service :9027\n(artifact storage)"]
+    WS["workspace-service :8010"]
+    LS["learning-service :9022"]
+    NS["notification-service :8016"]
+    CF["config-forge :8040"]
+  end
+
+  subgraph CAP["Capability Path — unchanged"]
+    CS["capability-service :9021\ncap.* registrations"]
+    PS["planner-service :9025\nPython / LangGraph"]
+    COND["conductor-service :9022\nPython / LangGraph"]
+    OB["onboarding-svc :9026"]
+    VSCODE["VSCode Extension\ncap.* only"]
+  end
+
+  subgraph SKILL["Skill Path — new"]
+    SR["skill-registry-service :9028\nsk.* registrations"]
+    SS["session-svc :9029"]
+    AG["Astra Agent (TS)\nin Electron app"]
+    ELECTRON["Electron Desktop App\nsk.* only"]
+  end
+
+  SHARED --> CAP
+  SHARED --> SKILL
+
+  style CAP   fill:#FEF3C7,stroke:#D97706
+  style SKILL fill:#D1FAE5,stroke:#059669
+  style SHARED fill:#E0E7FF,stroke:#4F46E5
+    </div>
+  </div>
+  <div class="note">Both paths produce artifacts governed by the same cam.* artifact kinds. The artifact-service, workspace-manager-service, workspace-service, learning-service, notification-service, and config-forge are fully shared.</div>
+</section>
+
+<!-- 2. Service Topology -->
+<section class="diagram-section" id="topology">
+  <h2>2. Service Topology</h2>
+  <p>The full service landscape showing what is new, what is unchanged, and what is shared.</p>
+  <div class="diagram-wrap">
+    <span class="label">service-topology.mermaid</span>
+    <div class="mermaid">
+flowchart LR
+  subgraph FRONTENDS["Frontends"]
+    VS["VSCode Extension\n(unchanged)"]
+    EL["Electron Desktop\n(new)"]
+  end
+
+  subgraph NEW["New Services"]
+    SR["skill-registry-service\n:9028"]
+    SS["session-svc\n:9029"]
+  end
+
+  subgraph CAPONLY["Capability-Only Services\n(unchanged)"]
+    CS["capability-service\n:9021"]
+    PS["planner-service\n:9025"]
+    CD["conductor-service\n:9022"]
+    OB["onboarding-svc\n:9026"]
+  end
+
+  subgraph SHARED["Shared Services"]
+    AS["artifact-service\n:9020"]
+    WM["workspace-manager-svc\n:9027"]
+    WS["workspace-service\n:8010"]
+    LS["learning-service\n:9022"]
+    NS["notification-service\n:8016"]
+    CF["config-forge\n:8040"]
+  end
+
+  VS --> CAPONLY
+  VS --> SHARED
+  EL --> NEW
+  EL --> SHARED
+
+  style NEW    fill:#D1FAE5,stroke:#059669
+  style CAPONLY fill:#FEF3C7,stroke:#D97706
+  style SHARED fill:#E0E7FF,stroke:#4F46E5
+    </div>
+  </div>
+  <div class="note">The Electron frontend never calls capability-service, planner-service, or conductor-service. The VSCode extension never calls skill-registry-service or session-svc.</div>
+</section>
+
+<!-- 3. Astra Agent Model -->
+<section class="diagram-section" id="agent">
+  <h2>3. Astra Agent — Unified Model</h2>
+  <p>The Astra Agent runs inside the Electron app. Two plan acquisition strategies feed into a single shared execution core. All sk.* identifiers — never cap.*.</p>
+  <div class="diagram-wrap">
+    <span class="label">astra-agent-model.mermaid</span>
+    <div class="mermaid">
+flowchart TB
+  subgraph TRIGGERS["Triggers"]
+    IT["User natural language intent"]
+    PT["User selects Skill Pack (sk.*)"]
+  end
+
+  subgraph ACQUISITION["Plan Acquisition"]
+    IPS["Intent Plan Strategy\nsk.* skills as tools\nLLM reasoning\nEmergent sequencing"]
+    PPS["Pack Plan Strategy\nRead sk.* pack playbook\nNo LLM reasoning\nDeterministic"]
+  end
+
+  PLAN["Plan\n{ steps: [ { skill_id: 'sk.*', inputs } ] }"]
+
+  subgraph CORE["Shared Execution Core"]
+    APR["Plan → Approve → Run"]
+    SR2["Skill resolution\n(load sk.* SKILL.md)"]
+    MCP["MCP invocation\n(one tool per skill)"]
+    ENR["Enrichment phases"]
+    PER["Artifact persistence\n(workspace-manager-svc)"]
+    STR["Conversational streaming\n(same character — both modes)"]
+  end
+
+  IT --> IPS
+  PT --> PPS
+  IPS --> PLAN
+  PPS --> PLAN
+  PLAN --> APR --> SR2 --> MCP --> ENR --> PER
+  STR -.- CORE
+
+  style PLAN fill:#E0E7FF,stroke:#4F46E5
+  style IPS  fill:#D1FAE5,stroke:#059669
+  style PPS  fill:#D1FAE5,stroke:#059669
+    </div>
+  </div>
+  <div class="note">The Astra Agent only ever resolves sk.* identifiers. cap.* identifiers are invisible to it. Both run modes stream conversational tokens via the Anthropic SDK SSE.</div>
+</section>
+
+<!-- 4. Intent-Driven Run -->
+<section class="diagram-section" id="intent-run">
+  <h2>4. Intent-Driven Run</h2>
+  <p>User expresses intent. Agent loads sk.* skill manifest and uses Claude to select and sequence skills as tools.</p>
+  <div class="diagram-wrap">
+    <span class="label">intent-run-sequence.mermaid</span>
+    <div class="mermaid">
+sequenceDiagram
+  participant UI  as Electron UI
+  participant AG  as Astra Agent
+  participant SR  as skill-registry-service
+  participant AN  as Anthropic API
+  participant MCP as MCP Server
+  participant WM  as workspace-manager-service
+  participant SS  as session-svc
+
+  UI->>AG: user message (intent)
+  AG->>SR: GET /manifest (sk.* skills as tool defs)
+  SR-->>AG: skill manifest
+  AG->>SS: GET /sessions/{id}
+  SS-->>AG: conversation history
+
+  AG->>AN: messages.stream({ tools: sk.* skills, messages })
+  AN-->>AG: SSE token stream
+  AG-->>UI: stream tokens to UI
+
+  AN-->>AG: tool_use — sk.x.y.z selected
+  AG->>SR: GET /skills/sk.x.y.z (load SKILL.md)
+  SR-->>AG: skill + execution block
+
+  Note over AG,UI: Approve gate — user confirms inputs
+  AG-->>UI: show approve form (prefilled_inputs)
+  UI->>AG: confirmed inputs
+
+  AG->>MCP: invoke tool_name (from execution block)
+  MCP-->>AG: artifact result
+  AG-->>UI: stream continues
+
+  AG->>WM: upsert artifact (cam.* kind)
+  AG->>SS: persist session history
+  AG-->>UI: run complete
+    </div>
+  </div>
+  <div class="note">Skills are presented as Anthropic tool definitions. The agent selects sk.* skills from the manifest — cap.* identifiers never appear. Artifacts are stored in workspace-manager-service using the shared cam.* artifact kind registry.</div>
+</section>
+
+<!-- 5. Pack-Driven Run -->
+<section class="diagram-section" id="pack-run">
+  <h2>5. Pack-Driven Run</h2>
+  <p>User selects a Skill Pack. The plan is read directly from the sk.* playbook — deterministic, no LLM reasoning for plan acquisition.</p>
+  <div class="diagram-wrap">
+    <span class="label">pack-run-sequence.mermaid</span>
+    <div class="mermaid">
+sequenceDiagram
+  participant UI  as Electron UI
+  participant AG  as Astra Agent
+  participant SR  as skill-registry-service
+  participant AN  as Anthropic API
+  participant MCP as MCP Server
+  participant WM  as workspace-manager-service
+
+  UI->>AG: user selects Skill Pack
+  AG->>SR: GET /skill-packs/{id}/resolved
+  SR-->>AG: pack + sk.* playbook steps
+
+  AG->>MCP: tools/list (resolve input schema)
+  MCP-->>AG: input schema + prefilled_inputs
+
+  AG-->>UI: show approve form
+  UI->>AG: confirmed inputs
+
+  Note over AG: Plan = playbook steps (no LLM reasoning)
+
+  loop For each sk.* step in playbook
+    AG->>SR: GET /skills/{sk.id}
+    SR-->>AG: SKILL.md + execution block
+
+    AG->>AN: stream (input resolution + narration)
+    AN-->>AG: tokens
+    AG-->>UI: stream tokens
+
+    AG->>MCP: invoke tool_name
+    MCP-->>AG: artifact result
+
+    AG->>AN: enrichment (diagram + narrative)
+    AN-->>AG: tokens
+    AG-->>UI: stream continues
+  end
+
+  AG->>WM: upsert-batch artifacts
+  AG-->>UI: run complete
+    </div>
+  </div>
+  <div class="note">Same pack + same inputs always produces the same artifact sequence. The Astra Agent never consults capability packs or cap.* identifiers during this flow.</div>
+</section>
+
+<!-- 6. Skill Anatomy -->
+<section class="diagram-section" id="skill-anatomy">
+  <h2>6. Skill Anatomy</h2>
+  <p>How a skill is structured, how it relates to its capability counterpart, and how its consumers use the two layers.</p>
+  <div class="diagram-wrap">
+    <span class="label">skill-anatomy.mermaid</span>
+    <div class="mermaid">
+flowchart LR
+  subgraph CAPSIDE["Capability (unchanged)"]
+    CAP["cap.asset.fetch_raina_input\nin capability-service\ntool_calls: array"]
+  end
+
+  subgraph SKILLSIDE["Skill (new)"]
+    FOLDER["sk.asset.fetch_raina_input/"]
+    FM["SKILL.md frontmatter\nname: sk.asset.fetch_raina_input\ndescription: when + what\nexecution.tool_name: single string\nproduces_kinds: cam.asset.raina_input"]
+    BODY["SKILL.md body\nNatural language instructions\nfor Astra Agent"]
+    REFS["references/\ndomain docs"]
+  end
+
+  SHARED_KIND["cam.asset.raina_input\n(shared artifact kind)"]
+
+  CAP -->|"produces"| SHARED_KIND
+  FOLDER --> FM
+  FOLDER --> BODY
+  FOLDER --> REFS
+  FM -->|"produces"| SHARED_KIND
+
+  style CAP         fill:#FEF3C7,stroke:#D97706
+  style FOLDER      fill:#D1FAE5,stroke:#059669
+  style FM          fill:#E0E7FF,stroke:#4F46E5
+  style SHARED_KIND fill:#F1F5F9,stroke:#64748B
+    </div>
+  </div>
+  <div class="note">Both cap.asset.fetch_raina_input and sk.asset.fetch_raina_input produce cam.asset.raina_input. The artifact kind is shared. The key structural difference: skills enforce one tool per skill (tool_name string), capabilities allow tool_calls array (to be corrected separately).</div>
+</section>
+
+<!-- 7. Seed Strategy -->
+<section class="diagram-section" id="seed">
+  <h2>7. Seed Strategy</h2>
+  <p>How capability seed data from capability-service is converted into skill seed data for skill-registry-service.</p>
+  <div class="diagram-wrap">
+    <span class="label">seed-strategy.mermaid</span>
+    <div class="mermaid">
+flowchart LR
+  subgraph SOURCE["Source — capability seed files"]
+    CAPFILE["cap.x.y.z\ntool_calls: [{tool: 'x', args_schema: {...}}]\ndescription: single sentence\nproduces_kinds: [cam.x.y]"]
+  end
+
+  subgraph CONVERT["Conversion"]
+    R1["cap. → sk. prefix"]
+    R2["tool_calls[0].tool → execution.tool_name\n(flatten array to string)"]
+    R3["args_schema removed\n(resolved at runtime)"]
+    R4["description enriched\n(LLM adds when-to-use context)"]
+    R5["SKILL.md body generated\n(LLM from description + tool schema)"]
+    R6["Multi-tool caps flagged\nfor manual split"]
+  end
+
+  subgraph TARGET["Target — skill seed files"]
+    SKILLFILE["sk.x.y.z\nexecution.tool_name: 'x'\ndescription: enriched when+what\nproduces_kinds: [cam.x.y]\nSKILL.md body: generated"]
+  end
+
+  SOURCE --> CONVERT --> TARGET
+
+  style SOURCE  fill:#FEF3C7,stroke:#D97706
+  style CONVERT fill:#F1F5F9,stroke:#64748B
+  style TARGET  fill:#D1FAE5,stroke:#059669
+    </div>
+  </div>
+  <div class="note">Capabilities with multiple tool_calls entries are flagged during conversion as requiring manual review — each tool becomes a separate sk.* skill. The cam.* produces_kinds are copied verbatim — no changes to artifact kind identifiers.</div>
+</section>
+
+<!-- 8. Build Phases -->
+<section class="diagram-section" id="build">
+  <h2>8. Build Phases</h2>
+  <p>Phased delivery plan. All existing services remain untouched throughout.</p>
+  <div class="diagram-wrap">
+    <span class="label">build-phases.mermaid</span>
+    <div class="mermaid">
+gantt
+  title ASTRA Skill Path — Build Phases
+  dateFormat  YYYY-MM-DD
+  axisFormat  %b %d
+
+  section Phase 1 — skill-registry-service
+    Build skill-registry-service :p1a, 2026-04-01, 10d
+    Convert capability seed data  :p1b, after p1a, 7d
+    Validate sk.* seed data       :p1c, after p1b, 3d
+
+  section Phase 2 — session-svc
+    Build session-svc             :p2a, after p1c, 5d
+
+  section Phase 3 — Astra Agent Core
+    Implement Astra Agent (TS)    :p3a, after p2a, 14d
+    Intent-driven run validation  :p3b, after p3a, 5d
+
+  section Phase 4 — Pack-Driven Run
+    Pack-driven run mode          :p4a, after p3b, 7d
+    Validate sk.* pack execution  :p4b, after p4a, 5d
+
+  section Phase 5 — Electron UX
+    Electron shell + UX           :p5a, after p4b, 21d
+    Skill onboarding flow         :p5b, after p5a, 7d
+    </div>
+  </div>
+  <div class="note">The VSCode extension and all capability services remain completely untouched throughout all phases. The skill path is developed entirely in parallel.</div>
+</section>
+
+</main>
+
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    primaryColor: '#E0E7FF', primaryTextColor: '#1A1A2E',
+    primaryBorderColor: '#4F46E5', lineColor: '#64748B',
+    secondaryColor: '#D1FAE5', tertiaryColor: '#E0F2FE',
+    fontFamily: 'Arial, sans-serif', fontSize: '14px',
+  },
+  sequence: { actorMargin: 60, messageMargin: 20, mirrorActors: false },
+  gantt: { barHeight: 22, barGap: 6, topPadding: 50, fontSize: 13 },
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "astra-desktop-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter electron-desktop dev",
+    "build": "pnpm --filter astra-agent build && pnpm --filter electron-desktop build",
+    "test": "pnpm --filter astra-agent test",
+    "package": "pnpm --filter astra-agent build && pnpm --filter electron-desktop package",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "prettier": "^3.3.2"
+  }
+}
