@@ -4,6 +4,10 @@
  * Mount this hook once in App.tsx. It sets up all agent:* subscriptions on mount
  * and cleans them up on unmount. All other components read from the store —
  * none of them subscribe to IPC directly.
+ *
+ * Token and run-complete handlers read activeSessionId from the store at call time
+ * (not from the closure) to avoid stale-closure bugs when the session changes
+ * mid-stream.
  */
 
 import { useEffect } from 'react';
@@ -17,14 +21,14 @@ export function useAgentStream(): void {
   const updatePlanStepStatus = useAppStore((state) => state.updatePlanStepStatus);
   const setAskUserRequest = useAppStore((state) => state.setAskUserRequest);
   const clearPlan = useAppStore((state) => state.clearPlan);
-  const activeSessionId = useAppStore((state) => state.activeSessionId);
 
   useEffect(() => {
     const api = window.electronAPI;
 
     const unsubscribeToken = api.onToken(({ delta }) => {
-      if (activeSessionId) {
-        appendToken(activeSessionId, delta);
+      const sessionId = useAppStore.getState().activeSessionId;
+      if (sessionId) {
+        appendToken(sessionId, delta);
       }
     });
 
@@ -50,17 +54,19 @@ export function useAgentStream(): void {
     });
 
     const unsubscribeRunComplete = api.onRunComplete(() => {
-      if (activeSessionId) {
-        finalizeAssistantMessage(activeSessionId);
+      const sessionId = useAppStore.getState().activeSessionId;
+      if (sessionId) {
+        finalizeAssistantMessage(sessionId);
       }
       setAgentStreaming(false);
       clearPlan();
     });
 
     const unsubscribeError = api.onError(({ message }) => {
-      if (activeSessionId) {
-        appendToken(activeSessionId, `\n\n**Error:** ${message}`);
-        finalizeAssistantMessage(activeSessionId);
+      const sessionId = useAppStore.getState().activeSessionId;
+      if (sessionId) {
+        appendToken(sessionId, `\n\n**Error:** ${message}`);
+        finalizeAssistantMessage(sessionId);
       }
       setAgentStreaming(false);
     });
@@ -72,14 +78,7 @@ export function useAgentStream(): void {
       unsubscribeRunComplete();
       unsubscribeError();
     };
-  }, [
-    activeSessionId,
-    appendToken,
-    finalizeAssistantMessage,
-    setAgentStreaming,
-    addPlanStep,
-    updatePlanStepStatus,
-    setAskUserRequest,
-    clearPlan,
-  ]);
+  // All these functions are stable references from Zustand — no re-subscription needed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }

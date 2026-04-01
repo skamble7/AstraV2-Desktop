@@ -34,9 +34,10 @@ import { IntentStrategy } from '../strategies/IntentStrategy.js';
 import { PackStrategy } from '../strategies/PackStrategy.js';
 import { SkillRegistryClient } from '../http/clients/SkillRegistryClient.js';
 import { WorkspaceManagerClient } from '../http/clients/WorkspaceManagerClient.js';
-import { LearningClient } from '../http/clients/LearningClient.js';
 import { ConfigForgeClient } from '../http/clients/ConfigForgeClient.js';
 import { LlmClientFactory } from '../http/clients/LlmClientFactory.js';
+import { SessionClient } from '../http/clients/SessionClient.js';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { AgentServiceConfig, UserInputResolver } from '../types/agent.types.js';
 import type { AgentEvent } from '../types/stream.types.js';
 
@@ -45,9 +46,9 @@ export class AgentController {
 
   // Shared across runs — these hold session-level state
   private readonly streamer: Streamer;
+  private readonly sessionClient: SessionClient;
   private readonly skillRegistryClient: SkillRegistryClient;
   private readonly artifactPersister: ArtifactPersister;
-  private readonly learningClient: LearningClient;
   private readonly configForgeClient: ConfigForgeClient;
   private readonly llmClientFactory: LlmClientFactory;
   private readonly skillManifestCache: SkillManifestCache;
@@ -70,6 +71,8 @@ export class AgentController {
 
     this.streamer = new Streamer();
 
+    this.sessionClient = new SessionClient({ baseUrl: config.sessionServiceBaseUrl });
+
     this.skillRegistryClient = new SkillRegistryClient({
       baseUrl: config.skillRegistryBaseUrl,
     });
@@ -79,7 +82,6 @@ export class AgentController {
     });
     this.artifactPersister = new ArtifactPersister(workspaceManagerClient);
 
-    this.learningClient = new LearningClient({ baseUrl: config.learningServiceBaseUrl });
     this.configForgeClient = new ConfigForgeClient({ baseUrl: config.configForgeBaseUrl });
 
     // LlmClientFactory resolves credentials from config-forge at run time — no API key needed at construction.
@@ -100,6 +102,38 @@ export class AgentController {
   }
 
   /**
+   * Loads conversation history from session service. Returns [] on any error so the
+   * agent always starts rather than failing due to a missing or unavailable session.
+   */
+  private async loadSessionHistory(
+    sessionId: string,
+    signal: AbortSignal
+  ): Promise<Anthropic.MessageParam[]> {
+    try {
+      const session = await this.sessionClient.getSession(sessionId, signal);
+      return (session.messages ?? []) as Anthropic.MessageParam[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Persists conversation history to session service after each turn.
+   * Best-effort — swallows errors so history failure never breaks a run.
+   */
+  private async saveSessionHistory(
+    sessionId: string,
+    messages: Anthropic.MessageParam[],
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      await this.sessionClient.updateSession(sessionId, { messages }, signal);
+    } catch {
+      // Best-effort — never let a history save failure break a conversation turn.
+    }
+  }
+
+  /**
    * Starts an intent-driven run. The user's natural language intent is handed
    * to IntentStrategy which uses Claude to plan and execute the skill sequence.
    */
@@ -107,61 +141,80 @@ export class AgentController {
     this.abortController = new AbortController();
     const signal = this.abortController.signal;
 
-    const { client: anthropic, model: plannerModel } = await this.llmClientFactory.resolve(signal);
-
-    const runContext = {
-      workspace_id: this.workspaceId,
-      session_id: sessionId,
-      run_id: randomUUID(),
-      mode: 'intent' as const,
-      intent,
-      anthropic,
-      plannerModel,
-      signal,
-    };
-
-    const mcpSessionPool = new McpSessionPool();
-    const mcpInvoker = new McpInvoker(mcpSessionPool, anthropic, sessionId, plannerModel);
-    const llmInvoker = new LlmInvoker(anthropic, this.configForgeClient);
-
-    const discoverPhase = new DiscoverPhase(mcpInvoker, llmInvoker);
-    const diagramPhase = new DiagramPhase(mcpInvoker, this.streamer);
-    const narrativePhase = new NarrativePhase(anthropic, this.streamer, plannerModel);
-    const runRecorder = new RunRecorder(this.learningClient);
-
-    const executionCore = new ExecutionCore({
-      skillResolver: this.skillResolver,
-      stepRunnerDeps: {
-        discoverPhase,
-        diagramPhase,
-        narrativePhase,
-        artifactPersister: this.artifactPersister,
-        runRecorder,
-        streamer: this.streamer,
-      },
-      runRecorder,
-      streamer: this.streamer,
-    });
-
-    const intentStrategy = new IntentStrategy(
-      this.skillResolver,
-      this.skillToToolConverter,
-      this.toolRegistry,
-      this.streamer,
-      this.skillRegistryClient,
-      this.userInputResolvers
-    );
+    let mcpSessionPool: McpSessionPool | null = null;
 
     try {
+      const { client: anthropic, model: plannerModel } = await this.llmClientFactory.resolve(signal);
+      const conversationHistory = await this.loadSessionHistory(sessionId, signal);
+
+      const runContext = {
+        workspace_id: this.workspaceId,
+        session_id: sessionId,
+        run_id: randomUUID(),
+        mode: 'intent' as const,
+        intent,
+        anthropic,
+        plannerModel,
+        signal,
+        conversationHistory,
+      };
+
+      mcpSessionPool = new McpSessionPool();
+      const mcpInvoker = new McpInvoker(mcpSessionPool, anthropic, sessionId, plannerModel);
+      const llmInvoker = new LlmInvoker(anthropic, this.configForgeClient);
+
+      const discoverPhase = new DiscoverPhase(mcpInvoker, llmInvoker);
+      const diagramPhase = new DiagramPhase(mcpInvoker, this.streamer);
+      const narrativePhase = new NarrativePhase(anthropic, this.streamer, plannerModel);
+      const runRecorder = new RunRecorder();
+
+      const executionCore = new ExecutionCore({
+        skillResolver: this.skillResolver,
+        stepRunnerDeps: {
+          discoverPhase,
+          diagramPhase,
+          narrativePhase,
+          artifactPersister: this.artifactPersister,
+          runRecorder,
+          streamer: this.streamer,
+        },
+        runRecorder,
+        streamer: this.streamer,
+      });
+
+      const intentStrategy = new IntentStrategy(
+        this.skillResolver,
+        this.skillToToolConverter,
+        this.toolRegistry,
+        this.streamer,
+        this.skillRegistryClient,
+        this.userInputResolvers
+      );
+
       const plan = await intentStrategy.plan(runContext);
-      await executionCore.execute(plan, this.workspaceId, signal);
+
+      // Persist the updated conversation history (user message + assistant response).
+      if (plan.updatedMessages) {
+        await this.saveSessionHistory(sessionId, plan.updatedMessages, signal);
+      }
+
+      if (plan.steps.length === 0) {
+        // Claude answered conversationally — no skills to execute.
+        // Publish run:completed so the renderer finalizes the streaming message.
+        this.streamer.publish({ type: 'run:completed', run_id: runContext.run_id });
+      } else {
+        await executionCore.execute(plan, this.workspaceId, signal);
+      }
     } catch (error) {
       if (!signal.aborted) {
         const message = error instanceof Error ? error.message : String(error);
+        console.error('[AgentController] startIntentRun failed:', error);
         this.streamer.publish({ type: 'run:failed', error: message });
       }
     } finally {
-      await mcpSessionPool.closeSession(sessionId);
+      if (mcpSessionPool) {
+        await mcpSessionPool.closeSession(sessionId);
+      }
     }
   }
 
@@ -199,7 +252,7 @@ export class AgentController {
     const discoverPhase = new DiscoverPhase(mcpInvoker, llmInvoker);
     const diagramPhase = new DiagramPhase(mcpInvoker, this.streamer);
     const narrativePhase = new NarrativePhase(anthropic, this.streamer, plannerModel);
-    const runRecorder = new RunRecorder(this.learningClient);
+    const runRecorder = new RunRecorder();
 
     const executionCore = new ExecutionCore({
       skillResolver: this.skillResolver,

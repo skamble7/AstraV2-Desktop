@@ -3,6 +3,8 @@
  * Both IntentStrategy and PackStrategy produce a Plan — ExecutionCore is blind to the source.
  */
 
+import type Anthropic from '@anthropic-ai/sdk';
+
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface PlanStep {
@@ -39,4 +41,9 @@ export interface Plan {
    * The workspace this plan executes in.
    */
   workspace_id: string;
+  /**
+   * Full conversation message array after this plan turn completed.
+   * Set by IntentStrategy; used by AgentController to persist history to session service.
+   */
+  updatedMessages?: Anthropic.MessageParam[];
 }

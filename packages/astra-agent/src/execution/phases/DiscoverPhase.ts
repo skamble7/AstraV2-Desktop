@@ -23,6 +23,9 @@ export class DiscoverPhase {
     skill: SkillDocument,
     signal: AbortSignal
   ): Promise<StagedArtifact[]> {
+    if (!skill.execution) {
+      throw new Error(`Skill "${skill.name}" has no execution config — cannot invoke.`);
+    }
     const invoker = skill.execution.mode === 'mcp' ? this.mcpInvoker : this.llmInvoker;
     const artifacts = await invoker.invoke(skill, step.args, signal);
 

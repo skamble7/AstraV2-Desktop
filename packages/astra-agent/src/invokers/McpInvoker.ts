@@ -37,8 +37,8 @@ export class McpInvoker implements IInvoker {
     args: Record<string, unknown>,
     signal: AbortSignal
   ): Promise<StagedArtifact[]> {
-    if (skill.execution.mode !== 'mcp') {
-      throw new Error(`McpInvoker cannot handle skill with mode "${skill.execution.mode}"`);
+    if (!skill.execution || skill.execution.mode !== 'mcp') {
+      throw new Error(`McpInvoker cannot handle skill "${skill.name}" — execution mode is not 'mcp'.`);
     }
 
     const execution = skill.execution as McpExecution;
@@ -184,7 +184,7 @@ export class McpInvoker implements IInvoker {
     // MCP tool results are typically { content: [{ type: 'text', text: '...' }] }
     // The actual structure depends on the MCP server implementation.
     // We treat the whole result as data for the first produces_kind.
-    const primaryKind = skill.produces_kinds[0] ?? 'cam.unknown';
+    const primaryKind = skill.produces_kinds?.[0] ?? 'cam.unknown';
 
     return [
       {

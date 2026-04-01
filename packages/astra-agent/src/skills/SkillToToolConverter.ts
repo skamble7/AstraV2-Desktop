@@ -51,16 +51,19 @@ export class SkillToToolConverter {
   private buildDescription(skill: SkillDocument): string {
     const lines: string[] = [skill.description];
 
-    if (skill.produces_kinds.length > 0) {
-      lines.push(`Produces: ${skill.produces_kinds.join(', ')}`);
+    const producesKinds = skill.produces_kinds ?? [];
+    if (producesKinds.length > 0) {
+      lines.push(`Produces: ${producesKinds.join(', ')}`);
     }
 
-    if (skill.depends_on && skill.depends_on.length > 0) {
-      lines.push(`Depends on: ${skill.depends_on.join(', ')}`);
+    const dependsOn = skill.depends_on ?? [];
+    if (dependsOn.length > 0) {
+      lines.push(`Depends on: ${dependsOn.join(', ')}`);
     }
 
-    if (skill.tags && skill.tags.length > 0) {
-      lines.push(`Tags: ${skill.tags.join(', ')}`);
+    const tags = skill.tags ?? [];
+    if (tags.length > 0) {
+      lines.push(`Tags: ${tags.join(', ')}`);
     }
 
     return lines.join('\n');

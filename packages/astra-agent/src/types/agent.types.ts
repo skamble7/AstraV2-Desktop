@@ -50,6 +50,11 @@ export interface AgentRunContext {
    * AbortSignal threaded through all async operations for graceful cancellation.
    */
   signal: AbortSignal;
+  /**
+   * Conversation history loaded from session service at the start of each turn.
+   * Prepended before the user message in IntentStrategy.
+   */
+  conversationHistory?: Anthropic.MessageParam[];
 }
 
 /**
@@ -61,7 +66,6 @@ export interface AgentServiceConfig {
   skillRegistryBaseUrl: string;
   sessionServiceBaseUrl: string;
   workspaceManagerBaseUrl: string;
-  learningServiceBaseUrl: string;
   configForgeBaseUrl: string;
   notificationServiceWsUrl: string;
   /**

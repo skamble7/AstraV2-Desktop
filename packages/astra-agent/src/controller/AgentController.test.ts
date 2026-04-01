@@ -22,7 +22,6 @@ function makeConfig(): AgentServiceConfig {
     skillRegistryBaseUrl: 'http://localhost:9028',
     sessionServiceBaseUrl: 'http://localhost:9029',
     workspaceManagerBaseUrl: 'http://localhost:9027',
-    learningServiceBaseUrl: 'http://localhost:9022',
     configForgeBaseUrl: 'http://localhost:8040',
     notificationServiceWsUrl: 'ws://localhost:8016/ws',
   };

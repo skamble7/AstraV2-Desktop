@@ -99,6 +99,7 @@ export class IntentStrategy implements IStrategy {
 
     const planSteps: PlanStep[] = [];
     const conversationMessages: Anthropic.MessageParam[] = [
+      ...(context.conversationHistory ?? []),
       { role: 'user', content: intent ?? '' },
     ];
 
@@ -198,6 +199,7 @@ export class IntentStrategy implements IStrategy {
       steps: planSteps,
       session_id,
       workspace_id,
+      updatedMessages: conversationMessages,
     };
   }
 

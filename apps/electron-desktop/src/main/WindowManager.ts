@@ -25,6 +25,7 @@ export class WindowManager {
       show: false,
       autoHideMenuBar: true,
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+      ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 14, y: 16 } } : {}),
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         nodeIntegration: false,

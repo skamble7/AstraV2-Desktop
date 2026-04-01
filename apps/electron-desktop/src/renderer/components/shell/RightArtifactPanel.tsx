@@ -103,7 +103,7 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
   );
 }
 
-export function RightArtifactPanel(): React.ReactElement {
+export function RightArtifactPanel({ width = 280 }: { width?: number }): React.ReactElement {
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const artifacts = useAppStore((state) =>
     currentWorkspaceId ? (state.artifactsByWorkspace[currentWorkspaceId] ?? []) : []
@@ -134,8 +134,8 @@ export function RightArtifactPanel(): React.ReactElement {
   return (
     <aside
       style={{
-        width: '268px',
-        minWidth: '268px',
+        width: `${width}px`,
+        minWidth: `${width}px`,
         display: 'flex',
         flexDirection: 'column',
         background: 'var(--bg1)',

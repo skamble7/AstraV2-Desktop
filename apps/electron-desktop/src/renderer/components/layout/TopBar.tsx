@@ -1,18 +1,108 @@
 /**
  * TopBar — 49px global header.
  *
- * Left: ASTRA logo + "v2" badge (click → Home)
- * Center: Context-sensitive breadcrumb
- * Right: Theme toggle + Settings gear
+ * Left: macOS traffic-light spacer → Back / Forward / Home nav buttons → ASTRA logo
+ * Center: context-sensitive breadcrumb
+ * Right: Theme toggle
+ *
+ * The 76px left padding clears macOS traffic-light buttons (hiddenInset titlebar).
  */
 
 import React from 'react';
 import { useAppStore } from '../../store/index.js';
 
+// ─── Nav Button ───────────────────────────────────────────────────────────────
+
+function NavBtn({
+  onClick,
+  disabled,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  title: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: disabled ? 'default' : 'pointer',
+        color: disabled ? 'var(--t3)' : 'var(--t1)',
+        padding: '5px 6px',
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'background 0.12s, color 0.12s',
+        opacity: disabled ? 0.35 : 1,
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) e.currentTarget.style.background = 'var(--bg3)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'none';
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Navigation Controls ──────────────────────────────────────────────────────
+
+function NavigationControls(): React.ReactElement {
+  const historyIndex = useAppStore((state) => state.historyIndex);
+  const historyStack = useAppStore((state) => state.historyStack);
+  const currentScreen = useAppStore((state) => state.currentScreen);
+  const goBack = useAppStore((state) => state.goBack);
+  const goForward = useAppStore((state) => state.goForward);
+  const navigateHome = useAppStore((state) => state.navigateHome);
+
+  const canGoBack = historyIndex > 0;
+  const canGoForward = historyIndex < historyStack.length - 1;
+  const isHome = currentScreen === 'home';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+      {/* Back */}
+      <NavBtn onClick={goBack} disabled={!canGoBack} title="Go back">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 2 4 7 9 12" />
+        </svg>
+      </NavBtn>
+
+      {/* Forward */}
+      <NavBtn onClick={goForward} disabled={!canGoForward} title="Go forward">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="5 2 10 7 5 12" />
+        </svg>
+      </NavBtn>
+
+      {/* Home */}
+      <NavBtn onClick={navigateHome} disabled={isHome} title="Go home">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 6.5 L7 1 L13 6.5" />
+          <path d="M2.5 5.5 L2.5 13 L5.5 13 L5.5 9.5 L8.5 9.5 L8.5 13 L11.5 13 L11.5 5.5" />
+        </svg>
+      </NavBtn>
+
+      {/* Divider */}
+      <div style={{ width: '1px', height: '16px', background: 'var(--border)', margin: '0 4px' }} />
+    </div>
+  );
+}
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
 function AstraLogo(): React.ReactElement {
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      {/* Simple SVG logomark */}
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
         <circle cx="10" cy="10" r="9" stroke="var(--accent-blue)" strokeWidth="1.5" />
         <path d="M5 10 L10 5 L15 10 L10 15 Z" stroke="var(--accent-blue)" strokeWidth="1.5" fill="none" />
@@ -38,58 +128,44 @@ function AstraLogo(): React.ReactElement {
   );
 }
 
+// ─── Breadcrumb ───────────────────────────────────────────────────────────────
+
 function Breadcrumb(): React.ReactElement {
   const currentScreen = useAppStore((state) => state.currentScreen);
   const activeWorkspace = useAppStore((state) => state.activeWorkspace);
   const navigateTo = useAppStore((state) => state.navigateTo);
   const navigateHome = useAppStore((state) => state.navigateHome);
 
-  const crumbStyle: React.CSSProperties = {
-    color: 'var(--t2)',
-    fontSize: '13px',
-    cursor: 'pointer',
-  };
-
-  const activeCrumbStyle: React.CSSProperties = {
-    color: 'var(--t1)',
-    fontSize: '13px',
-  };
-
-  const separatorStyle: React.CSSProperties = {
-    color: 'var(--t2)',
-    fontSize: '13px',
-    padding: '0 4px',
-  };
+  const crumb: React.CSSProperties = { color: 'var(--t2)', fontSize: '13px', cursor: 'pointer' };
+  const activeCrumb: React.CSSProperties = { color: 'var(--t1)', fontSize: '13px' };
+  const sep: React.CSSProperties = { color: 'var(--t2)', fontSize: '13px', padding: '0 4px' };
 
   if (currentScreen === 'home') return <></>;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      <span style={crumbStyle} onClick={navigateHome} role="button" tabIndex={0}>
+      <span style={crumb} onClick={navigateHome} role="button" tabIndex={0}>
         Home
       </span>
+
       {currentScreen === 'workspace-list' && (
         <>
-          <span style={separatorStyle}>›</span>
-          <span style={activeCrumbStyle}>Workspaces</span>
+          <span style={sep}>›</span>
+          <span style={activeCrumb}>Workspaces</span>
         </>
       )}
+
       {(currentScreen === 'workspace' || currentScreen === 'artifact-detail') && (
         <>
-          <span style={separatorStyle}>›</span>
-          <span
-            style={crumbStyle}
-            onClick={() => navigateTo('workspace-list')}
-            role="button"
-            tabIndex={0}
-          >
+          <span style={sep}>›</span>
+          <span style={crumb} onClick={() => navigateTo('workspace-list')} role="button" tabIndex={0}>
             Workspaces
           </span>
           {activeWorkspace && (
             <>
-              <span style={separatorStyle}>›</span>
+              <span style={sep}>›</span>
               <span
-                style={currentScreen === 'workspace' ? activeCrumbStyle : crumbStyle}
+                style={currentScreen === 'workspace' ? activeCrumb : crumb}
                 onClick={() => navigateTo('workspace', activeWorkspace.id)}
                 role="button"
                 tabIndex={0}
@@ -100,8 +176,8 @@ function Breadcrumb(): React.ReactElement {
           )}
           {currentScreen === 'artifact-detail' && (
             <>
-              <span style={separatorStyle}>›</span>
-              <span style={activeCrumbStyle}>Artifacts</span>
+              <span style={sep}>›</span>
+              <span style={activeCrumb}>Artifacts</span>
             </>
           )}
         </>
@@ -109,6 +185,8 @@ function Breadcrumb(): React.ReactElement {
     </div>
   );
 }
+
+// ─── Theme Toggle ─────────────────────────────────────────────────────────────
 
 function ThemeToggle(): React.ReactElement {
   const isLightTheme = useAppStore((state) => state.isLightTheme);
@@ -146,6 +224,8 @@ function ThemeToggle(): React.ReactElement {
   );
 }
 
+// ─── TopBar ───────────────────────────────────────────────────────────────────
+
 export function TopBar(): React.ReactElement {
   const navigateHome = useAppStore((state) => state.navigateHome);
 
@@ -157,24 +237,44 @@ export function TopBar(): React.ReactElement {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '0 16px',
         background: 'var(--bg1)',
         borderBottom: '0.5px solid var(--border)',
         WebkitAppRegion: 'drag',
+        // Extra right padding for symmetry
+        paddingRight: '12px',
       } as React.CSSProperties}
     >
-      {/* Left: Logo */}
+      {/* Left: traffic-light spacer + nav buttons + logo */}
       <div
-        style={{ cursor: 'pointer', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        onClick={navigateHome}
-        role="button"
-        tabIndex={0}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          // 76px clears macOS hiddenInset traffic lights
+          paddingLeft: '76px',
+          gap: '4px',
+          WebkitAppRegion: 'no-drag',
+        } as React.CSSProperties}
       >
-        <AstraLogo />
+        <NavigationControls />
+        <div
+          style={{ cursor: 'pointer' }}
+          onClick={navigateHome}
+          role="button"
+          tabIndex={0}
+        >
+          <AstraLogo />
+        </div>
       </div>
 
       {/* Center: Breadcrumb */}
-      <div style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div
+        style={{
+          position: 'absolute',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          WebkitAppRegion: 'no-drag',
+        } as React.CSSProperties}
+      >
         <Breadcrumb />
       </div>
 

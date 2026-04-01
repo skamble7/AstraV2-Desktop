@@ -25,8 +25,8 @@ export class LlmInvoker implements IInvoker {
     args: Record<string, unknown>,
     signal: AbortSignal
   ): Promise<StagedArtifact[]> {
-    if (skill.execution.mode !== 'llm') {
-      throw new Error(`LlmInvoker cannot handle skill with mode "${skill.execution.mode}"`);
+    if (!skill.execution || skill.execution.mode !== 'llm') {
+      throw new Error(`LlmInvoker cannot handle skill "${skill.name}" — execution mode is not 'llm'.`);
     }
 
     const execution = skill.execution as LlmExecution;
@@ -50,7 +50,7 @@ export class LlmInvoker implements IInvoker {
       throw new Error(`LLM skill "${skill.name}" returned non-text content`);
     }
 
-    const primaryKind = skill.produces_kinds[0] ?? 'cam.unknown';
+    const primaryKind = skill.produces_kinds?.[0] ?? 'cam.unknown';
 
     return [
       {

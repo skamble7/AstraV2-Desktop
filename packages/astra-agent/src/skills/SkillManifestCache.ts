@@ -31,7 +31,12 @@ export class SkillManifestCache {
       return this.skills!;
     }
 
-    this.skills = await this.skillRegistryClient.listPublishedSkills(signal);
+    try {
+      this.skills = await this.skillRegistryClient.listPublishedSkills(signal);
+    } catch {
+      // Skill registry unavailable — degrade gracefully to pure conversation mode.
+      this.skills = [];
+    }
     this.lastFetchedAt = Date.now();
     return this.skills;
   }

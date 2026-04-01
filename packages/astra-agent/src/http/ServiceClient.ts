@@ -44,6 +44,10 @@ export class ServiceClient {
     return this.request<T>('POST', path, body, signal);
   }
 
+  protected async put<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    return this.request<T>('PUT', path, body, signal);
+  }
+
   protected async patch<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     return this.request<T>('PATCH', path, body, signal);
   }

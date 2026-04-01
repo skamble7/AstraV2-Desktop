@@ -28,7 +28,6 @@ const SERVICE_CONFIG = {
   skillRegistryBaseUrl: process.env['SKILL_REGISTRY_URL'] ?? 'http://127.0.0.1:9028',
   sessionServiceBaseUrl: process.env['SESSION_SVC_URL'] ?? 'http://127.0.0.1:9029',
   workspaceManagerBaseUrl: process.env['WORKSPACE_MANAGER_URL'] ?? 'http://127.0.0.1:9027',
-  learningServiceBaseUrl: process.env['LEARNING_SVC_URL'] ?? 'http://127.0.0.1:9022',
   configForgeBaseUrl: process.env['CONFIG_FORGE_URL'] ?? 'http://127.0.0.1:8040',
   notificationServiceWsUrl: process.env['NOTIFICATION_WS_URL'] ?? 'ws://127.0.0.1:8016/ws',
   /**

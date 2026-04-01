@@ -38,14 +38,18 @@ export interface AuthConfig {
 export interface SkillDocument {
   name: string;
   description: string;
-  execution: SkillExecution;
-  produces_kinds: string[];
+  // Top-level fields present in the thin registry response:
+  domain?: string;
+  is_artifact_skill?: boolean;
+  skill_md_body?: string;
+  // Fields that may or may not be present as top-level fields:
+  execution?: SkillExecution;
+  produces_kinds?: string[];
   depends_on?: string[];
   tags?: string[];
-  status: 'draft' | 'published' | 'deprecated';
-  version: string;
+  status?: 'draft' | 'published' | 'deprecated';
+  version?: string;
   parameters_schema?: JSONSchema;
-  skill_md_body: string;
   references?: Record<string, string>;
   created_at: string;
   updated_at: string;
