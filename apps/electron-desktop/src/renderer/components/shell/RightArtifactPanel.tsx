@@ -9,33 +9,63 @@
 import React, { useEffect } from 'react';
 import { useAppStore } from '../../store/index.js';
 import type { ArtifactData } from '../../ipc/ElectronApi.js';
+import { getArtifactFileInfo } from '../../lib/utils.js';
+import type { ArtifactIconType } from '../../lib/utils.js';
 
-function CategoryPill({ kind }: { kind: string }): React.ReactElement {
-  const category = kind.split('.')[1] ?? 'general';
-  const colorMap: Record<string, string> = {
-    architecture: 'var(--accent-blue)',
-    agile: 'var(--accent-green)',
-    catalog: 'var(--accent-purple)',
-    data: 'var(--accent-amber)',
-    security: 'var(--accent-red)',
-  };
-  const color = colorMap[category] ?? 'var(--t2)';
+// ---------------------------------------------------------------------------
+// SVG icon components
+// ---------------------------------------------------------------------------
 
+function ArtifactFileIcon({ iconType, size = 18 }: { iconType: ArtifactIconType; size?: number }): React.ReactElement {
+  const color = 'var(--t0)';
+
+  if (iconType === 'code') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+        <path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+        <path d="M12 3v3h3" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+        <path d="M8 10l-2 2 2 2M12 10l2 2-2 2" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (iconType === 'diagram') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+        <rect x="7" y="2" width="6" height="4" rx="1" stroke={color} strokeWidth="1.25" />
+        <rect x="2" y="13" width="6" height="4" rx="1" stroke={color} strokeWidth="1.25" />
+        <rect x="12" y="13" width="6" height="4" rx="1" stroke={color} strokeWidth="1.25" />
+        <path d="M10 6v3M10 9l-5 4M10 9l5 4" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  // 'document' (default)
   return (
-    <span
-      style={{
-        fontSize: '10px',
-        padding: '1px 6px',
-        borderRadius: 'var(--radius-pill)',
-        background: `${color}22`,
-        color,
-        border: `0.5px solid ${color}44`,
-      }}
-    >
-      {category}
-    </span>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M12 3v3h3" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M7 10h6M7 13h4" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
   );
 }
+
+function FolderIcon({ size = 14 }: { size?: number }): React.ReactElement {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <path
+        d="M2 4a1 1 0 0 1 1-1h3l2 2h5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4z"
+        stroke="var(--t2)"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ArtifactCard
+// ---------------------------------------------------------------------------
 
 function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElement {
   const selectArtifact = useAppStore((state) => state.selectArtifact);
@@ -51,19 +81,20 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
     }
   };
 
-  // Derive a display name from the kind
   const displayName = artifact.kind.split('.').slice(2).join(' ')
     .split(/[_\s]+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ') || artifact.kind;
+
+  const { iconType, typeLabel } = getArtifactFileInfo(artifact);
 
   return (
     <button
       onClick={handleClick}
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: '5px',
+        alignItems: 'center',
+        gap: '10px',
         width: '100%',
         padding: '8px 10px',
         background: isSelected ? 'var(--bg3)' : 'none',
@@ -80,28 +111,59 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
         if (!isSelected) e.currentTarget.style.background = 'none';
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--t0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-          {displayName}
-        </span>
-        <CategoryPill kind={artifact.kind} />
+      {/* File-type icon container */}
+      <div
+        style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '8px',
+          background: 'var(--bg3)',
+          border: '0.5px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <ArtifactFileIcon iconType={iconType} size={18} />
       </div>
 
-      {/* Representation dots */}
-      <div style={{ display: 'flex', gap: '4px' }}>
-        {artifact.narrative && (
-          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-amber)' }} title="Narrative" />
-        )}
-        {artifact.diagram && (
-          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-purple)' }} title="Diagram" />
-        )}
-        {artifact.data && (
-          <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-blue)' }} title="Data" />
-        )}
+      {/* Name + type label */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: '12px',
+            fontWeight: 600,
+            color: 'var(--t0)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            lineHeight: 1.3,
+          }}
+        >
+          {displayName}
+        </div>
+        <div
+          style={{
+            fontSize: '11px',
+            color: 'var(--t2)',
+            marginTop: '2px',
+            lineHeight: 1.2,
+          }}
+        >
+          {typeLabel}
+        </div>
       </div>
+
+      {/* Folder icon */}
+      <FolderIcon size={14} />
     </button>
   );
 }
+
+// ---------------------------------------------------------------------------
+// RightArtifactPanel
+// ---------------------------------------------------------------------------
 
 export function RightArtifactPanel({ width = 280 }: { width?: number }): React.ReactElement {
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);

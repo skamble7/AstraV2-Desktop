@@ -15,6 +15,46 @@ import { NarrativeTab } from '../components/artifacts/tabs/NarrativeTab.js';
 import { DiagramTab } from '../components/artifacts/tabs/DiagramTab.js';
 import { DataTab } from '../components/artifacts/tabs/DataTab.js';
 import { FilesTab } from '../components/artifacts/tabs/FilesTab.js';
+import { getArtifactFileInfo } from '../lib/utils.js';
+import type { ArtifactIconType } from '../lib/utils.js';
+
+// ---------------------------------------------------------------------------
+// Icon component
+// ---------------------------------------------------------------------------
+
+function ArtifactFileIconSmall({ iconType }: { iconType: ArtifactIconType }): React.ReactElement {
+  const size = 14;
+  const color = 'var(--t0)';
+
+  if (iconType === 'code') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+        <path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+        <path d="M12 3v3h3" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+        <path d="M8 10l-2 2 2 2M12 10l2 2-2 2" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (iconType === 'diagram') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+        <rect x="7" y="2" width="6" height="4" rx="1" stroke={color} strokeWidth="1.25" />
+        <rect x="2" y="13" width="6" height="4" rx="1" stroke={color} strokeWidth="1.25" />
+        <rect x="12" y="13" width="6" height="4" rx="1" stroke={color} strokeWidth="1.25" />
+        <path d="M10 6v3M10 9l-5 4M10 9l5 4" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M12 3v3h3" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+      <path d="M7 10h6M7 13h4" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,9 +130,9 @@ interface ArtifactListItemProps {
 
 function ArtifactListItem({ artifact, isSelected, onSelect }: ArtifactListItemProps): React.ReactElement {
   const category = kindToCategory(artifact.kind);
-  const color = categoryColor(category);
   const displayName = kindToDisplayName(artifact.kind);
   const tabs = availableTabs(artifact);
+  const { iconType } = getArtifactFileInfo(artifact);
 
   return (
     <button
@@ -114,13 +154,19 @@ function ArtifactListItem({ artifact, isSelected, onSelect }: ArtifactListItemPr
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
         <div
           style={{
-            width: '7px',
-            height: '7px',
-            borderRadius: '50%',
-            background: color,
+            width: '28px',
+            height: '28px',
+            borderRadius: '6px',
+            background: 'var(--bg3)',
+            border: '0.5px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             flexShrink: 0,
           }}
-        />
+        >
+          <ArtifactFileIconSmall iconType={iconType} />
+        </div>
         <span
           style={{
             fontSize: '12px',
@@ -135,7 +181,7 @@ function ArtifactListItem({ artifact, isSelected, onSelect }: ArtifactListItemPr
           {displayName}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: '4px', paddingLeft: '13px' }}>
+      <div style={{ display: 'flex', gap: '4px', paddingLeft: '34px' }}>
         {tabs.map((tab) => (
           <div
             key={tab}
@@ -154,7 +200,7 @@ function ArtifactListItem({ artifact, isSelected, onSelect }: ArtifactListItemPr
         style={{
           fontSize: '10px',
           color: 'var(--t2)',
-          paddingLeft: '13px',
+          paddingLeft: '34px',
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
         }}
@@ -194,13 +240,19 @@ function ArtifactDetailPane({ artifact, activeTab, onTabChange }: ArtifactDetail
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
           <div
             style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: categoryColor(kindToCategory(artifact.kind)),
+              width: '26px',
+              height: '26px',
+              borderRadius: '6px',
+              background: 'var(--bg3)',
+              border: '0.5px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               flexShrink: 0,
             }}
-          />
+          >
+            <ArtifactFileIconSmall iconType={getArtifactFileInfo(artifact).iconType} />
+          </div>
           <h2 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--t0)', margin: 0 }}>
             {kindToDisplayName(artifact.kind)}
           </h2>

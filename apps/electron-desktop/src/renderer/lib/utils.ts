@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { ArtifactData } from '../ipc/ElectronApi.js';
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
@@ -47,4 +48,41 @@ export function getWorkspaceColor(name: string): string {
     hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
   }
   return colors[Math.abs(hash) % colors.length] ?? '#4a9eff';
+}
+
+// ---------------------------------------------------------------------------
+// Artifact file-type helpers
+// ---------------------------------------------------------------------------
+
+export type ArtifactIconType = 'code' | 'document' | 'diagram';
+
+export interface ArtifactFileInfo {
+  iconType: ArtifactIconType;
+  typeLabel: string;
+}
+
+/**
+ * Derives a display icon type and type label from an artifact's kind and
+ * available representations. Handles both cam.* Astra artifacts and future
+ * non-Astra artifacts identified by file-extension-style kind strings.
+ */
+export function getArtifactFileInfo(artifact: ArtifactData): ArtifactFileInfo {
+  const { kind, data, diagram, narrative } = artifact;
+
+  // Explicit file-extension kinds (future non-cam artifacts)
+  if (kind.endsWith('.html')) return { iconType: 'code', typeLabel: 'Code · HTML' };
+  if (kind.endsWith('.md'))   return { iconType: 'document', typeLabel: 'Document · MD' };
+  if (kind.endsWith('.docx')) return { iconType: 'document', typeLabel: 'Document · DOCX' };
+
+  // cam.* domain artifacts — inspect which representations are present
+  if (kind.startsWith('cam.')) {
+    if (diagram && !data && !narrative) return { iconType: 'diagram', typeLabel: 'Diagram · Mermaid' };
+    if (narrative && !data && !diagram) return { iconType: 'document', typeLabel: 'Document · MD' };
+    if (data !== undefined && data !== null) return { iconType: 'code', typeLabel: 'Artifact · JSON' };
+  }
+
+  // Fallback: inspect representations for non-cam kinds
+  if (diagram && !data && !narrative) return { iconType: 'diagram', typeLabel: 'Diagram · Mermaid' };
+  if (narrative && !data && !diagram) return { iconType: 'document', typeLabel: 'Document · MD' };
+  return { iconType: 'document', typeLabel: 'Document' };
 }
