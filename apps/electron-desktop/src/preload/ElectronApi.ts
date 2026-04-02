@@ -53,6 +53,14 @@ export interface ConversationData {
   updated_at: string;
 }
 
+export interface MessageData {
+  message_id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
 export interface SkillPackData {
   key: string;
   version: string;
@@ -123,6 +131,8 @@ export interface ElectronAPI {
     userId: string,
     cursor: string
   ): Promise<{ conversations: ConversationData[]; next_cursor: string | null }>;
+
+  listMessages(conversationId: string): Promise<{ messages: MessageData[] }>;
 
   /** Push event — conversation auto-named by agent. Returns unsubscribe fn. */
   onConversationRenamed(

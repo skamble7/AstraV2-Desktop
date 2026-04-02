@@ -31,8 +31,17 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
   const startAssistantMessage = useAppStore((state) => state.startAssistantMessage);
   const setAgentStreaming = useAppStore((state) => state.setAgentStreaming);
   const clearPlan = useAppStore((state) => state.clearPlan);
+  const fetchMessages = useAppStore((state) => state.fetchMessages);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Hydrate messages from the backend whenever the active conversation changes
+  useEffect(() => {
+    if (!conversationId) return;
+    void fetchMessages(conversationId).catch((err: unknown) => {
+      console.error('[ChatPanel] fetchMessages failed:', err);
+    });
+  }, [conversationId, fetchMessages]);
 
   // Auto-scroll to bottom on new messages / tokens
   useEffect(() => {

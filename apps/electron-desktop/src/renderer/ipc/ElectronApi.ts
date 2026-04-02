@@ -9,6 +9,7 @@ export type {
   WorkspaceData,
   ArtifactData,
   ConversationData,
+  MessageData,
   SkillPackData,
 } from '../../preload/ElectronApi.js';
 

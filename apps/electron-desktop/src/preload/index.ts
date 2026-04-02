@@ -92,6 +92,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onConversationRenamed: (callback: (p: { conversation_id: string; name: string }) => void): Unsubscribe =>
     createSubscription(IPC_CHANNELS.CONVERSATION_RENAMED, callback),
 
+  listMessages: (conversationId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_MESSAGES_LIST, { conversation_id: conversationId }),
+
   // ─── Skill Pack Operations ────────────────────────────────────────────────
   listSkillPacks: (): Promise<unknown[]> =>
     ipcRenderer.invoke(IPC_CHANNELS.SKILL_PACK_LIST),

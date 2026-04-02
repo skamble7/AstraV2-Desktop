@@ -39,6 +39,9 @@ export function WorkspaceSidebar(): React.ReactElement {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
+  // Hover tracking for showing the ... button
+  const [hoveredConversationId, setHoveredConversationId] = useState<string | null>(null);
+
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     conversationId: string;
@@ -114,12 +117,13 @@ export function WorkspaceSidebar(): React.ReactElement {
   };
 
   const openContextMenu = (
-    e: React.MouseEvent,
+    e: React.MouseEvent<HTMLButtonElement>,
     conversationId: string
   ): void => {
     e.preventDefault();
     e.stopPropagation();
-    setContextMenu({ conversationId, x: e.clientX, y: e.clientY });
+    const rect = e.currentTarget.getBoundingClientRect();
+    setContextMenu({ conversationId, x: rect.right + 4, y: rect.top });
   };
 
   const confirmDelete = (conversationId: string): void => {
@@ -346,12 +350,15 @@ export function WorkspaceSidebar(): React.ReactElement {
           {conversations.map((conversation) => {
             const isActive = activeConversationId === conversation.conversation_id;
             const isRenaming = renamingId === conversation.conversation_id;
+            const isHovered = hoveredConversationId === conversation.conversation_id;
+            const menuOpen = contextMenu?.conversationId === conversation.conversation_id;
 
             return (
               <div
                 key={conversation.conversation_id}
-                onContextMenu={(e) => openContextMenu(e, conversation.conversation_id)}
                 style={{ position: 'relative' }}
+                onMouseEnter={() => setHoveredConversationId(conversation.conversation_id)}
+                onMouseLeave={() => setHoveredConversationId(null)}
               >
                 {isRenaming ? (
                   <input
@@ -374,55 +381,77 @@ export function WorkspaceSidebar(): React.ReactElement {
                     }}
                   />
                 ) : (
-                  <button
-                    onClick={() => setActiveConversation(conversation.conversation_id)}
-                    onDoubleClick={() =>
-                      startRename(
-                        conversation.conversation_id,
-                        conversation.name ?? 'Untitled conversation'
-                      )
-                    }
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '6px 8px 2px 8px',
-                      background: isActive ? 'var(--bg2)' : 'none',
-                      border: 'none',
-                      borderRadius: '7px',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.background = 'var(--bg2)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.background = 'none';
-                    }}
-                  >
-                    <p
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', borderRadius: '7px', background: isActive ? 'var(--bg2)' : 'none' }}>
+                    {/* Main clickable area */}
+                    <button
+                      onClick={() => setActiveConversation(conversation.conversation_id)}
                       style={{
+                        flex: 1,
+                        minWidth: 0,
+                        padding: '6px 8px 2px 8px',
+                        background: 'none',
+                        border: 'none',
+                        borderRadius: '7px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) (e.currentTarget.parentElement as HTMLElement).style.background = 'var(--bg2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) (e.currentTarget.parentElement as HTMLElement).style.background = 'none';
+                      }}
+                    >
+                      <p style={{
                         fontSize: '12px',
                         color: isActive ? 'var(--t0)' : 'var(--t1)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
                         margin: 0,
-                      }}
-                    >
-                      {conversation.name ?? 'Untitled conversation'}
-                    </p>
-                    <p
-                      style={{
-                        fontSize: '10px',
-                        color: 'var(--t3)',
-                        margin: '1px 0 4px 0',
-                      }}
-                    >
-                      {conversation.message_count > 0
-                        ? `${conversation.message_count} message${conversation.message_count === 1 ? '' : 's'}`
-                        : 'No messages'}
-                    </p>
-                  </button>
+                        paddingRight: (isHovered || menuOpen) ? '20px' : '0',
+                      }}>
+                        {conversation.name ?? 'Untitled conversation'}
+                      </p>
+                      <p style={{ fontSize: '10px', color: 'var(--t3)', margin: '1px 0 4px 0' }}>
+                        {conversation.message_count > 0
+                          ? `${conversation.message_count} message${conversation.message_count === 1 ? '' : 's'}`
+                          : 'No messages'}
+                      </p>
+                    </button>
+
+                    {/* Three-dot button — visible on hover or when menu is open */}
+                    {(isHovered || menuOpen) && (
+                      <button
+                        onClick={(e) => openContextMenu(e, conversation.conversation_id)}
+                        style={{
+                          position: 'absolute',
+                          right: '4px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          width: '22px',
+                          height: '22px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: menuOpen ? 'var(--bg3)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '5px',
+                          cursor: 'pointer',
+                          color: 'var(--t2)',
+                          flexShrink: 0,
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg3)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = menuOpen ? 'var(--bg3)' : 'transparent')}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                          <circle cx="3" cy="7" r="1.2"/>
+                          <circle cx="7" cy="7" r="1.2"/>
+                          <circle cx="11" cy="7" r="1.2"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -431,7 +460,7 @@ export function WorkspaceSidebar(): React.ReactElement {
 
       </div>
 
-      {/* Context menu */}
+      {/* Three-dot context menu */}
       {contextMenu && (
         <div
           style={{
@@ -439,32 +468,57 @@ export function WorkspaceSidebar(): React.ReactElement {
             top: contextMenu.y,
             left: contextMenu.x,
             zIndex: 1000,
-            background: 'var(--bg2)',
+            background: 'var(--bg1)',
             border: '0.5px solid var(--border)',
-            borderRadius: '8px',
+            borderRadius: '10px',
             padding: '4px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            minWidth: '140px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+            minWidth: '180px',
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Star */}
           <button
-            onClick={() => confirmDelete(contextMenu.conversationId)}
-            style={{
-              display: 'block',
-              width: '100%',
-              padding: '6px 10px',
-              background: 'none',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              color: 'var(--red, #e53e3e)',
-              textAlign: 'left',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg3)')}
+            onClick={() => setContextMenu(null)}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '7px 10px', background: 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: 'var(--t0)', textAlign: 'left' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
           >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M7.5 1.5l1.545 3.13 3.455.502-2.5 2.436.59 3.44L7.5 9.387l-3.09 1.621.59-3.44-2.5-2.436 3.455-.502L7.5 1.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            </svg>
+            Star
+          </button>
+
+          {/* Rename */}
+          <button
+            onClick={() => {
+              const conv = conversations.find(c => c.conversation_id === contextMenu.conversationId);
+              setContextMenu(null);
+              startRename(contextMenu.conversationId, conv?.name ?? 'Untitled conversation');
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '7px 10px', background: 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: 'var(--t0)', textAlign: 'left' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M10.5 2.5a1.414 1.414 0 0 1 2 2L5 12H3v-2L10.5 2.5z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+            </svg>
+            Rename
+          </button>
+
+          <div style={{ height: '0.5px', background: 'var(--border)', margin: '4px 0' }} />
+
+          {/* Delete */}
+          <button
+            onClick={() => confirmDelete(contextMenu.conversationId)}
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '7px 10px', background: 'none', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', color: 'var(--red, #e53e3e)', textAlign: 'left' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+              <path d="M3 4h9M6 4V2.5h3V4M5.5 4v7.5h4V4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
             Delete
           </button>
         </div>

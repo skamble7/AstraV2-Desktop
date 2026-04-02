@@ -81,8 +81,9 @@ export function WorkspaceShellScreen(): React.ReactElement {
     void (async () => {
       try {
         await fetchConversations(currentWorkspaceId);
-      } catch {
-        // Network/service error — fall through so we still auto-create
+      } catch (err) {
+        console.error('[WorkspaceShellScreen] fetchConversations failed:', err);
+        // Fall through so we still auto-create if the service is unavailable
       }
       const latestConversations =
         useAppStore.getState().conversationsByWorkspace[currentWorkspaceId] ?? [];

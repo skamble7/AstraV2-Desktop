@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { ElectronAPI, ConversationData } from '../../ipc/ElectronApi.js';
+import type { ElectronAPI, ConversationData, MessageData } from '../../ipc/ElectronApi.js';
 
 export interface ChatMessage {
   id: string;
@@ -16,6 +16,7 @@ export interface ConversationSlice {
   nextCursor: string | null;
 
   fetchConversations: (workspaceId: string, userId?: string) => Promise<void>;
+  fetchMessages: (conversationId: string) => Promise<void>;
   setActiveConversation: (conversationId: string | null) => void;
   createConversation: (workspaceId: string) => Promise<ConversationData>;
   loadMoreConversations: (workspaceId: string, userId?: string) => Promise<void>;
@@ -65,6 +66,30 @@ export const createConversationSlice: StateCreator<ConversationSlice> = (set, ge
           [workspaceId]: conversations,
         },
         nextCursor: next_cursor,
+      }));
+    },
+
+    fetchMessages: async (conversationId) => {
+      const api = getApi();
+      if (typeof api.listMessages !== 'function') {
+        console.error('[fetchMessages] api.listMessages is not available — restart the app fully to reload the preload');
+        return;
+      }
+      console.log('[fetchMessages] fetching for conversation:', conversationId);
+      const { messages } = await api.listMessages(conversationId);
+      console.log('[fetchMessages] received', (messages as MessageData[]).length, 'messages');
+      const mapped: ChatMessage[] = (messages as MessageData[]).map((m) => ({
+        id: m.message_id,
+        role: m.role,
+        content: m.content,
+        isStreaming: false,
+        timestamp: Date.now(),
+      }));
+      set((state) => ({
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversationId]: mapped,
+        },
       }));
     },
 

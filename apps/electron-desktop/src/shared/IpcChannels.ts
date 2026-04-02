@@ -42,6 +42,7 @@ export const IPC_CHANNELS = {
   CONVERSATION_RENAME: 'conversation:rename',
   CONVERSATION_DELETE: 'conversation:delete',
   CONVERSATION_LOAD_MORE: 'conversation:load-more',
+  CONVERSATION_MESSAGES_LIST: 'conversation:messages-list',
 
   // Conversation push events (main → renderer)
   CONVERSATION_RENAMED: 'conversation:renamed',
