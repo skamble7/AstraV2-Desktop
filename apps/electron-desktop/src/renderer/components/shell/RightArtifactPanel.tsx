@@ -1,16 +1,18 @@
 /**
- * RightArtifactPanel — right column of the workspace shell (268px fixed).
+ * RightArtifactPanel — right column of the workspace shell.
  *
- * Two tabs:
- * - Artifacts: list of artifact cards for the current workspace
- * - Context: placeholder for future context display
+ * Three always-visible collapsible sections (top to bottom):
+ *   1. Artifacts  — list of artifact cards for the current workspace
+ *   2. Progress   — plan step indicators (PlanProgressBar)
+ *   3. Context    — placeholder for future context display
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore } from '../../store/index.js';
 import type { ArtifactData } from '../../ipc/ElectronApi.js';
 import { getArtifactFileInfo } from '../../lib/utils.js';
 import type { ArtifactIconType } from '../../lib/utils.js';
+import { PlanProgressBar } from './PlanProgressBar.js';
 
 // ---------------------------------------------------------------------------
 // SVG icon components
@@ -40,7 +42,6 @@ function ArtifactFileIcon({ iconType, size = 18 }: { iconType: ArtifactIconType;
     );
   }
 
-  // 'document' (default)
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
       <path d="M5 3h7l3 3v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
@@ -60,6 +61,62 @@ function FolderIcon({ size = 14 }: { size?: number }): React.ReactElement {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SectionHeader
+// ---------------------------------------------------------------------------
+
+interface SectionHeaderProps {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+}
+
+function SectionHeader({ title, open, onToggle }: SectionHeaderProps): React.ReactElement {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        padding: '9px 12px',
+        background: 'none',
+        border: 'none',
+        borderBottom: open ? '0.5px solid var(--border)' : 'none',
+        borderRadius: open ? '0' : '8px',
+        cursor: 'pointer',
+        textAlign: 'left',
+      }}
+    >
+      <span
+        style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          color: 'var(--t1)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {title}
+      </span>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        fill="none"
+        style={{
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          transition: 'transform 0.15s',
+          flexShrink: 0,
+        }}
+      >
+        <path d="M3 5l4 4 4-4" stroke="var(--t2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
   );
 }
 
@@ -111,7 +168,6 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
         if (!isSelected) e.currentTarget.style.background = 'none';
       }}
     >
-      {/* File-type icon container */}
       <div
         style={{
           width: '36px',
@@ -127,8 +183,6 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
       >
         <ArtifactFileIcon iconType={iconType} size={18} />
       </div>
-
-      {/* Name + type label */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -143,19 +197,10 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
         >
           {displayName}
         </div>
-        <div
-          style={{
-            fontSize: '11px',
-            color: 'var(--t2)',
-            marginTop: '2px',
-            lineHeight: 1.2,
-          }}
-        >
+        <div style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '2px', lineHeight: 1.2 }}>
           {typeLabel}
         </div>
       </div>
-
-      {/* Folder icon */}
       <FolderIcon size={14} />
     </button>
   );
@@ -170,28 +215,18 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
   const artifacts = useAppStore((state) =>
     currentWorkspaceId ? (state.artifactsByWorkspace[currentWorkspaceId] ?? []) : []
   );
-  const rightPanelTab = useAppStore((state) => state.rightPanelTab);
-  const setRightPanelTab = useAppStore((state) => state.setRightPanelTab);
+  const planSteps = useAppStore((state) => state.currentPlanSteps);
   const fetchArtifacts = useAppStore((state) => state.fetchArtifacts);
+
+  const [artifactsOpen, setArtifactsOpen] = useState(true);
+  const [progressOpen, setProgressOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(true);
 
   useEffect(() => {
     if (currentWorkspaceId) {
       void fetchArtifacts(currentWorkspaceId);
     }
   }, [currentWorkspaceId, fetchArtifacts]);
-
-  const tabStyle = (active: boolean): React.CSSProperties => ({
-    flex: 1,
-    padding: '7px',
-    background: 'none',
-    border: 'none',
-    borderBottom: active ? '2px solid var(--accent-blue)' : '2px solid transparent',
-    color: active ? 'var(--t0)' : 'var(--t2)',
-    fontSize: '12px',
-    fontWeight: active ? 600 : 400,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  });
 
   return (
     <aside
@@ -202,22 +237,30 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
         flexDirection: 'column',
         background: 'var(--bg1)',
         overflow: 'hidden',
+        padding: '10px',
+        gap: '20px',
       }}
     >
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '0.5px solid var(--border)' }}>
-        <button style={tabStyle(rightPanelTab === 'artifacts')} onClick={() => setRightPanelTab('artifacts')}>
-          Artifacts
-        </button>
-        <button style={tabStyle(rightPanelTab === 'context')} onClick={() => setRightPanelTab('context')}>
-          Context
-        </button>
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 6px' }}>
-        {rightPanelTab === 'artifacts' && (
-          <>
+      {/* ── Artifacts ─────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          flex: artifactsOpen ? 1 : '0 0 auto',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          border: '0.5px solid var(--border)',
+          borderRadius: '10px',
+          background: 'var(--bg2)',
+          overflow: 'hidden',
+        }}
+      >
+        <SectionHeader
+          title="Artifacts"
+          open={artifactsOpen}
+          onToggle={() => setArtifactsOpen((v) => !v)}
+        />
+        {artifactsOpen && (
+          <div style={{ flex: 1, overflow: 'auto', padding: '4px 6px' }}>
             {artifacts.length === 0 ? (
               <p style={{ fontSize: '12px', color: 'var(--t2)', padding: '8px' }}>No artifacts yet</p>
             ) : (
@@ -225,10 +268,59 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
                 <ArtifactCard key={artifact.id} artifact={artifact} />
               ))
             )}
-          </>
+          </div>
         )}
-        {rightPanelTab === 'context' && (
-          <p style={{ fontSize: '12px', color: 'var(--t2)', padding: '8px' }}>Context coming soon</p>
+      </div>
+
+      {/* ── Progress ──────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          flexShrink: 0,
+          border: '0.5px solid var(--border)',
+          borderRadius: '10px',
+          background: 'var(--bg2)',
+          overflow: 'hidden',
+        }}
+      >
+        <SectionHeader
+          title="Progress"
+          open={progressOpen}
+          onToggle={() => setProgressOpen((v) => !v)}
+        />
+        {progressOpen && (
+          <div style={{ padding: '8px 10px' }}>
+            {planSteps.length > 0 ? (
+              <PlanProgressBar />
+            ) : (
+              <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
+                See task progress for longer tasks.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Context ───────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          flexShrink: 0,
+          border: '0.5px solid var(--border)',
+          borderRadius: '10px',
+          background: 'var(--bg2)',
+          overflow: 'hidden',
+        }}
+      >
+        <SectionHeader
+          title="Context"
+          open={contextOpen}
+          onToggle={() => setContextOpen((v) => !v)}
+        />
+        {contextOpen && (
+          <div style={{ padding: '8px 10px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
+              Track tools and referenced files used in this task.
+            </p>
+          </div>
         )}
       </div>
     </aside>

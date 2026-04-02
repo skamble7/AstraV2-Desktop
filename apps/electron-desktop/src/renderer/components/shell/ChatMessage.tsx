@@ -69,17 +69,21 @@ export function ChatMessage({ message }: ChatMessageProps): React.ReactElement {
         {message.isStreaming ? (
           <pre style={{ margin: 0, fontFamily: 'inherit', fontSize: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {message.content}
-            <span
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="var(--accent-blue)"
               style={{
                 display: 'inline-block',
-                width: '2px',
-                height: '14px',
-                background: 'var(--accent-blue)',
-                marginLeft: '1px',
-                verticalAlign: 'text-bottom',
-                animation: 'blink 1s step-end infinite',
+                marginLeft: '3px',
+                verticalAlign: 'middle',
+                flexShrink: 0,
+                animation: 'astra-star-pulse 1.1s ease-in-out infinite',
               }}
-            />
+            >
+              <path d="M6 0 L7.1 4.9 L12 6 L7.1 7.1 L6 12 L4.9 7.1 L0 6 L4.9 4.9 Z" />
+            </svg>
           </pre>
         ) : (
           <div className="markdown-content">

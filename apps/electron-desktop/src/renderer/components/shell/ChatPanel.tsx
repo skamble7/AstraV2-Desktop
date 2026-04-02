@@ -4,16 +4,16 @@
  * Layout (top to bottom):
  * 1. SkillPackDock (pack selector + run button)
  * 2. Message thread (scrollable)
- * 3. PlanProgressBar (visible when agent is running)
- * 4. InlineUserInputPrompt (visible when ask_user is active)
- * 5. ChatInput (always visible)
+ * 3. InlineUserInputPrompt (visible when ask_user is active)
+ * 4. ChatInput (always visible)
+ *
+ * PlanProgressBar has moved to the right panel (RightArtifactPanel › Progress section).
  */
 
 import React, { useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/index.js';
 import { ChatMessage } from './ChatMessage.js';
 import { ChatInput } from './ChatInput.js';
-import { PlanProgressBar } from './PlanProgressBar.js';
 import { InlineUserInputPrompt } from './InlineUserInputPrompt.js';
 import { SkillPackDock } from './SkillPackDock.js';
 
@@ -123,11 +123,6 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
         ))}
 
         <div ref={messagesEndRef} />
-      </div>
-
-      {/* Plan Progress */}
-      <div style={{ padding: '0 12px' }}>
-        <PlanProgressBar />
       </div>
 
       {/* ask_user inline prompt */}

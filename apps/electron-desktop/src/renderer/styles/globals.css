@@ -93,3 +93,19 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--bg5);
 }
+
+/* ─── Animations ─────────────────────────────────────────────────────────────── */
+@keyframes astra-star-pulse {
+  0%, 100% { transform: scale(0.85); opacity: 0.75; }
+  50%       { transform: scale(1.25); opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
