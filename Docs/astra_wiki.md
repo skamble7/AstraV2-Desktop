@@ -762,43 +762,69 @@ The service publishes RabbitMQ events after mutations using routing keys in the 
 
 ---
 
-### Session Service
+### Conversation Service
 
-The session-svc (port **9029**) is a thin MongoDB-backed conversation history store purpose-built for the Astra Agent. It stores Anthropic SDK message arrays so the TypeScript Astra Agent can maintain stateful, multi-turn conversations across sessions without managing persistence itself.
+The conversation-svc (port **9029**) is a MongoDB-backed conversation history store for the Astra platform. It manages multi-turn conversation state, stores Anthropic SDK message arrays, tracks reasoning traces, and supports soft-delete with cursor-based pagination.
 
 #### Responsibilities
 
-- **Session lifecycle:** Create sessions (with auto-generated or caller-supplied UUIDs), list sessions per workspace, retrieve full session state, and delete sessions.
-- **Message history:** Append messages to an existing session (`PATCH`) or replace the entire message history (`PUT`). The `messages` field stores native Anthropic SDK message format (`{role: "user"|"assistant", content: string | ContentBlock[]}`) — the service treats content as opaque and stores it as-is.
+- **Conversation lifecycle:** Create conversations (with auto-generated or caller-supplied UUIDs), list per workspace+user, retrieve, rename, and soft-delete conversations.
+- **Message history:** Append messages (with optional `reasoning_trace`) atomically via `$push / $inc`, replace the entire history via `PUT`, or retrieve raw messages for agent consumption.
+- **Rendered view:** `GET /conversations/{id}` strips raw messages to a clean rendered format (text-only, tool_result blocks dropped) for UI consumers.
 
 #### API
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/sessions` | Create session; returns `session_id` |
-| `GET` | `/sessions?workspace_id=` | List sessions for a workspace |
-| `GET` | `/sessions/{session_id}` | Get session with all messages |
-| `PATCH` | `/sessions/{session_id}/messages` | Append messages to history |
-| `PUT` | `/sessions/{session_id}/messages` | Replace full message history |
-| `DELETE` | `/sessions/{session_id}` | Delete session |
+| `POST` | `/conversations` | Create conversation; returns `ConversationDocument` |
+| `GET` | `/conversations?workspace_id=&user_id=` | List conversations (cursor pagination, no messages/reasoning_trace) |
+| `GET` | `/conversations/{id}` | Get conversation with `rendered_messages` (no raw messages) |
+| `PATCH` | `/conversations/{id}` | Rename conversation |
+| `PATCH` | `/conversations/{id}/messages` | Append messages + reasoning_trace |
+| `PUT` | `/conversations/{id}/messages` | Replace full message history |
+| `GET` | `/conversations/{id}/messages` | Get raw Anthropic message dicts |
+| `DELETE` | `/conversations/{id}` | Soft-delete conversation |
 
 #### Data Model
 
 ```
-SessionDocument
-  session_id: str          # UUID, primary key
-  workspace_id: str        # links session to an ASTRA workspace
-  messages: [              # Anthropic SDK message array
+ConversationDocument
+  conversation_id: str          # UUID, primary key
+  workspace_id: str             # owning workspace
+  user_id: str                  # owning user — required filter key
+  name: str | None              # human-readable name
+  messages: [                   # Anthropic SDK message array (opaque)
     { role: "user"|"assistant", content: any }
   ]
+  reasoning_trace: [dict]       # internal only — never returned via API
+  message_count: int            # denormalised; incremented via $inc
+  deleted_at: datetime | None   # soft delete timestamp
   created_at: datetime
   updated_at: datetime
 ```
 
-The `PATCH /messages` endpoint uses MongoDB `$push / $each` to atomically append messages without loading the full document. `PUT /messages` replaces the array entirely.
+#### Pagination
+
+List queries use **cursor pagination** via the `before` query param (ISO `updated_at` timestamp). Default page size is 20. The response includes a `next_cursor` field; pass it as `?before=<cursor>` to fetch the next page.
+
+#### Events (RabbitMQ)
+
+| Routing key | Trigger |
+|---|---|
+| `astra.conversation.created.v1` | Successful conversation creation |
+| `astra.conversation.deleted.v1` | Successful soft-delete |
+
+#### MongoDB Indexes
+
+- `conversation_id` — unique
+- `workspace_id` — standard
+- `created_at` — standard
+- `(workspace_id, user_id, updated_at)` — compound, for list queries
+- `deleted_at` — sparse
 
 #### Design Notes
 
-- **Publish-only RabbitMQ** — the service connects to RabbitMQ for outbound event publishing only; it has no consumers and no workspace lifecycle dependency.
-- **Opaque content** — message `content` is stored as-is (string or structured block list). The service does not inspect, validate, or transform message content — that is the Astra Agent's responsibility.
-- **Workspace-scoped** — every session is associated with a `workspace_id`, enabling the agent and UI to list all sessions for a given workspace context.
+- **Soft delete** — `DELETE` sets `deleted_at`; records are excluded from all list and get queries automatically.
+- **Dual message views** — `GET /{id}` returns rendered messages (text-only, safe for UI); `GET /{id}/messages` returns raw Anthropic dicts (for agent replay).
+- **Reasoning trace** — stored alongside messages but never exposed through public endpoints.
+- **Publish-only RabbitMQ** — no consumers; RabbitMQ failure at startup is non-fatal.
