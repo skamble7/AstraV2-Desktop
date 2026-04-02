@@ -191,7 +191,7 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
         <div
           style={{
             fontSize: np ? '14px' : '12px',
-            fontWeight: 600,
+            fontWeight: np ? 400 : 600,
             color: 'var(--t0)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
