@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import type { ElectronAPI, SessionData } from '../../ipc/ElectronApi.js';
+import type { ElectronAPI, ConversationData } from '../../ipc/ElectronApi.js';
 
 export interface ChatMessage {
   id: string;
@@ -10,18 +10,23 @@ export interface ChatMessage {
 }
 
 export interface ConversationSlice {
-  sessionsByWorkspace: Record<string, SessionData[]>;
-  activeSessionId: string | null;
-  messagesBySession: Record<string, ChatMessage[]>;
+  conversationsByWorkspace: Record<string, ConversationData[]>;
+  activeConversationId: string | null;
+  messagesByConversation: Record<string, ChatMessage[]>;
+  nextCursor: string | null;
 
-  fetchSessions: (workspaceId: string) => Promise<void>;
-  setActiveSession: (sessionId: string | null) => void;
-  createSession: (workspaceId: string) => Promise<SessionData>;
+  fetchConversations: (workspaceId: string, userId?: string) => Promise<void>;
+  setActiveConversation: (conversationId: string | null) => void;
+  createConversation: (workspaceId: string) => Promise<ConversationData>;
+  loadMoreConversations: (workspaceId: string, userId?: string) => Promise<void>;
+  renameConversation: (workspaceId: string, conversationId: string, name: string) => Promise<void>;
+  deleteConversation: (workspaceId: string, conversationId: string) => Promise<void>;
+  updateConversationName: (conversationId: string, name: string) => void;
 
-  appendUserMessage: (sessionId: string, content: string) => string;
-  startAssistantMessage: (sessionId: string) => string;
-  appendToken: (sessionId: string, delta: string) => void;
-  finalizeAssistantMessage: (sessionId: string) => void;
+  appendUserMessage: (conversationId: string, content: string) => string;
+  startAssistantMessage: (conversationId: string) => string;
+  appendToken: (conversationId: string, delta: string) => void;
+  finalizeAssistantMessage: (conversationId: string) => void;
 }
 
 let messageIdCounter = 0;
@@ -29,117 +34,211 @@ function nextMessageId(): string {
   return `msg-${Date.now()}-${++messageIdCounter}`;
 }
 
-export const createConversationSlice: StateCreator<ConversationSlice> = (set, get) => ({
-  sessionsByWorkspace: {},
-  activeSessionId: null,
-  messagesBySession: {},
+function getApi(): ElectronAPI {
+  return (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
+}
 
-  fetchSessions: async (workspaceId) => {
-    const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
-    const sessions = await api.listSessions(workspaceId);
-    set((state) => ({
-      sessionsByWorkspace: { ...state.sessionsByWorkspace, [workspaceId]: sessions },
-    }));
-  },
-
-  setActiveSession: (sessionId) => set({ activeSessionId: sessionId }),
-
-  createSession: async (workspaceId) => {
-    const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
-    const session = await api.createSession(workspaceId, 'New conversation');
-    set((state) => ({
-      sessionsByWorkspace: {
-        ...state.sessionsByWorkspace,
-        [workspaceId]: [session, ...(state.sessionsByWorkspace[workspaceId] ?? [])],
-      },
-      activeSessionId: session.session_id,
-      messagesBySession: {
-        ...state.messagesBySession,
-        [session.session_id]: [],
-      },
-    }));
-    return session;
-  },
-
-  appendUserMessage: (sessionId, content) => {
-    const id = nextMessageId();
-    const message: ChatMessage = {
-      id,
-      role: 'user',
-      content,
-      isStreaming: false,
-      timestamp: Date.now(),
-    };
-    set((state) => ({
-      messagesBySession: {
-        ...state.messagesBySession,
-        [sessionId]: [...(state.messagesBySession[sessionId] ?? []), message],
-      },
-    }));
-    return id;
-  },
-
-  startAssistantMessage: (sessionId) => {
-    const id = nextMessageId();
-    const message: ChatMessage = {
-      id,
-      role: 'assistant',
-      content: '',
-      isStreaming: true,
-      timestamp: Date.now(),
-    };
-    set((state) => ({
-      messagesBySession: {
-        ...state.messagesBySession,
-        [sessionId]: [...(state.messagesBySession[sessionId] ?? []), message],
-      },
-    }));
-    return id;
-  },
-
-  /**
-   * Appends a token delta to the last streaming assistant message.
-   * Uses immer-style mutation via the state setter — efficient for high-frequency updates.
-   */
-  appendToken: (sessionId, delta) => {
-    set((state) => {
-      const messages = state.messagesBySession[sessionId];
-      if (!messages || messages.length === 0) return state;
-
-      const lastMessage = messages[messages.length - 1];
-      if (!lastMessage || !lastMessage.isStreaming) return state;
-
-      const updated: ChatMessage = { ...lastMessage, content: lastMessage.content + delta };
-      return {
-        messagesBySession: {
-          ...state.messagesBySession,
-          [sessionId]: [...messages.slice(0, -1), updated],
-        },
-      };
-    });
-  },
-
-  finalizeAssistantMessage: (sessionId) => {
-    set((state) => {
-      const messages = state.messagesBySession[sessionId];
-      if (!messages || messages.length === 0) return state;
-
-      const lastMessage = messages[messages.length - 1];
-      if (!lastMessage || !lastMessage.isStreaming) return state;
-
-      const finalized: ChatMessage = { ...lastMessage, isStreaming: false };
-      return {
-        messagesBySession: {
-          ...state.messagesBySession,
-          [sessionId]: [...messages.slice(0, -1), finalized],
-        },
-      };
-    });
-
-    // Clear active streaming session for the plan step display
-    const { activeSessionId } = get();
-    if (activeSessionId === sessionId) {
-      // Session finalized — keep it active but streaming flag cleared
+export const createConversationSlice: StateCreator<ConversationSlice> = (set, get) => {
+  // Subscribe to conversation:renamed push events on slice creation.
+  // This runs once when the store is initialised.
+  if (typeof window !== 'undefined') {
+    const api = (window as unknown as { electronAPI?: ElectronAPI }).electronAPI;
+    if (api?.onConversationRenamed) {
+      api.onConversationRenamed(({ conversation_id, name }) => {
+        get().updateConversationName(conversation_id, name);
+      });
     }
-  },
-});
+  }
+
+  return {
+    conversationsByWorkspace: {},
+    activeConversationId: null,
+    messagesByConversation: {},
+    nextCursor: null,
+
+    fetchConversations: async (workspaceId, userId = '') => {
+      const api = getApi();
+      const { conversations, next_cursor } = await api.listConversations(workspaceId, userId);
+      set((state) => ({
+        conversationsByWorkspace: {
+          ...state.conversationsByWorkspace,
+          [workspaceId]: conversations,
+        },
+        nextCursor: next_cursor,
+      }));
+    },
+
+    setActiveConversation: (conversationId) => set({ activeConversationId: conversationId }),
+
+    createConversation: async (workspaceId) => {
+      const api = getApi();
+      const conversation = await api.createConversation(workspaceId, 'New conversation');
+      set((state) => ({
+        conversationsByWorkspace: {
+          ...state.conversationsByWorkspace,
+          [workspaceId]: [
+            conversation,
+            ...(state.conversationsByWorkspace[workspaceId] ?? []),
+          ],
+        },
+        activeConversationId: conversation.conversation_id,
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversation.conversation_id]: [],
+        },
+      }));
+      return conversation;
+    },
+
+    loadMoreConversations: async (workspaceId, userId = '') => {
+      const { nextCursor } = get();
+      if (!nextCursor) return;
+      const api = getApi();
+      const { conversations, next_cursor } = await api.loadMoreConversations(
+        workspaceId,
+        userId,
+        nextCursor
+      );
+      set((state) => ({
+        conversationsByWorkspace: {
+          ...state.conversationsByWorkspace,
+          [workspaceId]: [
+            ...(state.conversationsByWorkspace[workspaceId] ?? []),
+            ...conversations,
+          ],
+        },
+        nextCursor: next_cursor,
+      }));
+    },
+
+    renameConversation: async (workspaceId, conversationId, name) => {
+      const api = getApi();
+      await api.renameConversation(conversationId, name);
+      set((state) => ({
+        conversationsByWorkspace: {
+          ...state.conversationsByWorkspace,
+          [workspaceId]: (state.conversationsByWorkspace[workspaceId] ?? []).map((c) =>
+            c.conversation_id === conversationId ? { ...c, name } : c
+          ),
+        },
+      }));
+    },
+
+    deleteConversation: async (workspaceId, conversationId) => {
+      const api = getApi();
+      await api.deleteConversation(conversationId);
+      set((state) => {
+        const remaining = (state.conversationsByWorkspace[workspaceId] ?? []).filter(
+          (c) => c.conversation_id !== conversationId
+        );
+        const activeConversationId =
+          state.activeConversationId === conversationId
+            ? (remaining[0]?.conversation_id ?? null)
+            : state.activeConversationId;
+        return {
+          conversationsByWorkspace: {
+            ...state.conversationsByWorkspace,
+            [workspaceId]: remaining,
+          },
+          activeConversationId,
+        };
+      });
+    },
+
+    updateConversationName: (conversationId, name) => {
+      set((state) => {
+        const updated: Record<string, ConversationData[]> = {};
+        for (const [wsId, convos] of Object.entries(state.conversationsByWorkspace)) {
+          updated[wsId] = convos.map((c) =>
+            c.conversation_id === conversationId ? { ...c, name } : c
+          );
+        }
+        return { conversationsByWorkspace: updated };
+      });
+    },
+
+    appendUserMessage: (conversationId, content) => {
+      const id = nextMessageId();
+      const message: ChatMessage = {
+        id,
+        role: 'user',
+        content,
+        isStreaming: false,
+        timestamp: Date.now(),
+      };
+      set((state) => ({
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversationId]: [
+            ...(state.messagesByConversation[conversationId] ?? []),
+            message,
+          ],
+        },
+      }));
+      return id;
+    },
+
+    startAssistantMessage: (conversationId) => {
+      const id = nextMessageId();
+      const message: ChatMessage = {
+        id,
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+        timestamp: Date.now(),
+      };
+      set((state) => ({
+        messagesByConversation: {
+          ...state.messagesByConversation,
+          [conversationId]: [
+            ...(state.messagesByConversation[conversationId] ?? []),
+            message,
+          ],
+        },
+      }));
+      return id;
+    },
+
+    /**
+     * Appends a token delta to the last streaming assistant message.
+     */
+    appendToken: (conversationId, delta) => {
+      set((state) => {
+        const messages = state.messagesByConversation[conversationId];
+        if (!messages || messages.length === 0) return state;
+
+        const lastMessage = messages[messages.length - 1];
+        if (!lastMessage || !lastMessage.isStreaming) return state;
+
+        const updated: ChatMessage = {
+          ...lastMessage,
+          content: lastMessage.content + delta,
+        };
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: [...messages.slice(0, -1), updated],
+          },
+        };
+      });
+    },
+
+    finalizeAssistantMessage: (conversationId) => {
+      set((state) => {
+        const messages = state.messagesByConversation[conversationId];
+        if (!messages || messages.length === 0) return state;
+
+        const lastMessage = messages[messages.length - 1];
+        if (!lastMessage || !lastMessage.isStreaming) return state;
+
+        const finalized: ChatMessage = { ...lastMessage, isStreaming: false };
+        return {
+          messagesByConversation: {
+            ...state.messagesByConversation,
+            [conversationId]: [...messages.slice(0, -1), finalized],
+          },
+        };
+      });
+    },
+  };
+};

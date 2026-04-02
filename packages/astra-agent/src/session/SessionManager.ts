@@ -63,11 +63,11 @@ export class SessionManager {
     const session = await this.sessionClient.createSession(
       {
         workspace_id: workspaceId,
-        ...(title !== undefined ? { title } : {}),
+        ...(title !== undefined ? { name: title } : {}),
       },
       signal
     );
-    return session.session_id;
+    return session.conversation_id;
   }
 
   /**

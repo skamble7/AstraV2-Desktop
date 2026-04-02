@@ -19,12 +19,12 @@ import { SkillPackDock } from './SkillPackDock.js';
 
 interface ChatPanelProps {
   workspaceId: string;
-  sessionId: string | null;
+  conversationId: string | null;
 }
 
-export function ChatPanel({ workspaceId, sessionId }: ChatPanelProps): React.ReactElement {
+export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): React.ReactElement {
   const messages = useAppStore((state) =>
-    sessionId ? (state.messagesBySession[sessionId] ?? []) : []
+    conversationId ? (state.messagesByConversation[conversationId] ?? []) : []
   );
   const isAgentStreaming = useAppStore((state) => state.isAgentStreaming);
   const appendUserMessage = useAppStore((state) => state.appendUserMessage);
@@ -40,25 +40,25 @@ export function ChatPanel({ workspaceId, sessionId }: ChatPanelProps): React.Rea
   }, [messages.length, messages[messages.length - 1]?.content?.length]);
 
   const handleSendMessage = (content: string): void => {
-    if (!sessionId) return;
+    if (!conversationId) return;
 
-    appendUserMessage(sessionId, content);
-    startAssistantMessage(sessionId);
-    setAgentStreaming(true, sessionId);
+    appendUserMessage(conversationId, content);
+    startAssistantMessage(conversationId);
+    setAgentStreaming(true, conversationId);
     clearPlan();
 
     void window.electronAPI.sendMessage({
       workspace_id: workspaceId,
       message: content,
-      session_id: sessionId,
+      session_id: conversationId, // field name stays session_id for AgentIpcHandler compatibility
     });
   };
 
   const handleRunPack = (packKey: string, packVersion: string): void => {
-    if (!sessionId) return;
+    if (!conversationId) return;
 
-    startAssistantMessage(sessionId);
-    setAgentStreaming(true, sessionId);
+    startAssistantMessage(conversationId);
+    setAgentStreaming(true, conversationId);
     clearPlan();
 
     void window.electronAPI.runPack({
@@ -66,7 +66,7 @@ export function ChatPanel({ workspaceId, sessionId }: ChatPanelProps): React.Rea
       pack_key: packKey,
       pack_version: packVersion,
       inputs: {},
-      session_id: sessionId,
+      session_id: conversationId, // field name stays session_id for AgentIpcHandler compatibility
     });
   };
 

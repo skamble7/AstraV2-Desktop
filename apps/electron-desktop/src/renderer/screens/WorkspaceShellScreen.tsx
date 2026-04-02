@@ -19,10 +19,10 @@ const RIGHT_PANEL_DEFAULT = 280;
 
 export function WorkspaceShellScreen(): React.ReactElement {
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
-  const activeSessionId = useAppStore((state) => state.activeSessionId);
-  const createSession = useAppStore((state) => state.createSession);
-  const setActiveSession = useAppStore((state) => state.setActiveSession);
-  const fetchSessions = useAppStore((state) => state.fetchSessions);
+  const activeConversationId = useAppStore((state) => state.activeConversationId);
+  const createConversation = useAppStore((state) => state.createConversation);
+  const setActiveConversation = useAppStore((state) => state.setActiveConversation);
+  const fetchConversations = useAppStore((state) => state.fetchConversations);
 
   // Right panel width — persisted in localStorage
   const [rightWidth, setRightWidth] = useState<number>(() => {
@@ -73,18 +73,23 @@ export function WorkspaceShellScreen(): React.ReactElement {
     };
   }, []);
 
-  // Fetch sessions, then pick or create one — avoids the race where we create
-  // a duplicate session before fetchSessions resolves.
+  // Fetch conversations, then pick or create one — avoids the race where we create
+  // a duplicate conversation before fetchConversations resolves.
   useEffect(() => {
     if (!currentWorkspaceId) return;
 
     void (async () => {
-      await fetchSessions(currentWorkspaceId);
-      const latestSessions = useAppStore.getState().sessionsByWorkspace[currentWorkspaceId] ?? [];
-      if (latestSessions.length > 0) {
-        setActiveSession(latestSessions[0]!.session_id);
+      try {
+        await fetchConversations(currentWorkspaceId);
+      } catch {
+        // Network/service error — fall through so we still auto-create
+      }
+      const latestConversations =
+        useAppStore.getState().conversationsByWorkspace[currentWorkspaceId] ?? [];
+      if (latestConversations.length > 0) {
+        setActiveConversation(latestConversations[0]!.conversation_id);
       } else {
-        await createSession(currentWorkspaceId);
+        await createConversation(currentWorkspaceId);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -101,7 +106,7 @@ export function WorkspaceShellScreen(): React.ReactElement {
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
       <WorkspaceSidebar />
-      <ChatPanel workspaceId={currentWorkspaceId} sessionId={activeSessionId} />
+      <ChatPanel workspaceId={currentWorkspaceId} conversationId={activeConversationId} />
 
       {/* Drag handle */}
       <div

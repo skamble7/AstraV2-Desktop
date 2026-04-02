@@ -54,6 +54,7 @@ const ipcRouter = new IpcRouter(agentRegistry, streamBridge, workspaceClient, {
   workspaceManagerBaseUrl: SERVICE_CONFIG.workspaceManagerBaseUrl,
   sessionServiceBaseUrl: SERVICE_CONFIG.sessionServiceBaseUrl,
   skillRegistryBaseUrl: SERVICE_CONFIG.skillRegistryBaseUrl,
+  userId: process.env['ASTRA_USER_ID'] ?? 'local',
 });
 
 // ─── App Lifecycle ────────────────────────────────────────────────────────────

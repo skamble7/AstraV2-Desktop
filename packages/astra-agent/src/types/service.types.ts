@@ -54,27 +54,31 @@ export interface SkillPackSummary {
   status: string;
 }
 
-// ─── Session Service (:9029) ─────────────────────────────────────────────────
+// ─── Conversation Service (:9029) ────────────────────────────────────────────
 
-export interface SessionDocument {
-  session_id: string;
+export interface ConversationDocument {
+  conversation_id: string;
   workspace_id: string;
-  messages: unknown[];
+  /** Present only from GET /conversations/{id}/messages */
+  messages?: unknown[];
   reasoning_trace?: unknown[];
-  title?: string;
+  name?: string;
+  message_count: number;
   created_at: string;
   updated_at: string;
 }
 
-export interface CreateSessionRequest {
+export interface CreateConversationRequest {
   workspace_id: string;
-  title?: string;
+  user_id?: string;
+  name?: string;
 }
 
-export interface UpdateSessionRequest {
+export interface UpdateConversationRequest {
   messages?: unknown[];
   reasoning_trace?: unknown[];
   title?: string;
+  name?: string;
 }
 
 // ─── Learning Service (:9022) ────────────────────────────────────────────────

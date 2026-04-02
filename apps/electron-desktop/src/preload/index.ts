@@ -73,12 +73,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getArtifact: (workspaceId: string, artifactId: string): Promise<unknown> =>
     ipcRenderer.invoke(IPC_CHANNELS.ARTIFACT_GET, { workspace_id: workspaceId, artifact_id: artifactId }),
 
-  // ─── Session Operations ───────────────────────────────────────────────────
-  listSessions: (workspaceId: string): Promise<unknown[]> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SESSION_LIST, { workspace_id: workspaceId }),
+  // ─── Conversation Operations ──────────────────────────────────────────────
+  listConversations: (workspaceId: string, userId: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LIST, { workspace_id: workspaceId, user_id: userId }),
 
-  createSession: (workspaceId: string, title?: string): Promise<unknown> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SESSION_CREATE, { workspace_id: workspaceId, title }),
+  createConversation: (workspaceId: string, name?: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_CREATE, { workspace_id: workspaceId, name }),
+
+  renameConversation: (conversationId: string, name: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_RENAME, { conversation_id: conversationId, name }),
+
+  deleteConversation: (conversationId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_DELETE, { conversation_id: conversationId }),
+
+  loadMoreConversations: (workspaceId: string, userId: string, cursor: string): Promise<unknown> =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONVERSATION_LOAD_MORE, { workspace_id: workspaceId, user_id: userId, cursor }),
+
+  onConversationRenamed: (callback: (p: { conversation_id: string; name: string }) => void): Unsubscribe =>
+    createSubscription(IPC_CHANNELS.CONVERSATION_RENAMED, callback),
 
   // ─── Skill Pack Operations ────────────────────────────────────────────────
   listSkillPacks: (): Promise<unknown[]> =>

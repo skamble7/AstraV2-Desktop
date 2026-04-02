@@ -34,4 +34,4 @@ export type { Plan, PlanStep, StepStatus } from './types/plan.types.js';
 export type { SkillPackDocument } from './types/skill.types.js';
 
 // Service response types for the Electron main process service clients
-export type { WorkspaceResponse, SessionDocument } from './types/service.types.js';
+export type { WorkspaceResponse, ConversationDocument } from './types/service.types.js';

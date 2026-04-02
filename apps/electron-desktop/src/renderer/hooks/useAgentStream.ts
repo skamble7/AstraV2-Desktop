@@ -5,7 +5,7 @@
  * and cleans them up on unmount. All other components read from the store —
  * none of them subscribe to IPC directly.
  *
- * Token and run-complete handlers read activeSessionId from the store at call time
+ * Token and run-complete handlers read activeConversationId from the store at call time
  * (not from the closure) to avoid stale-closure bugs when the session changes
  * mid-stream.
  */
@@ -26,7 +26,7 @@ export function useAgentStream(): void {
     const api = window.electronAPI;
 
     const unsubscribeToken = api.onToken(({ delta }) => {
-      const sessionId = useAppStore.getState().activeSessionId;
+      const sessionId = useAppStore.getState().activeConversationId;
       if (sessionId) {
         appendToken(sessionId, delta);
       }
@@ -54,7 +54,7 @@ export function useAgentStream(): void {
     });
 
     const unsubscribeRunComplete = api.onRunComplete(() => {
-      const sessionId = useAppStore.getState().activeSessionId;
+      const sessionId = useAppStore.getState().activeConversationId;
       if (sessionId) {
         finalizeAssistantMessage(sessionId);
       }
@@ -63,7 +63,7 @@ export function useAgentStream(): void {
     });
 
     const unsubscribeError = api.onError(({ message }) => {
-      const sessionId = useAppStore.getState().activeSessionId;
+      const sessionId = useAppStore.getState().activeConversationId;
       if (sessionId) {
         appendToken(sessionId, `\n\n**Error:** ${message}`);
         finalizeAssistantMessage(sessionId);

@@ -11,13 +11,15 @@ import type { WorkspaceServiceClient } from '../services/WorkspaceServiceClient.
 import { registerAgentIpcHandlers } from './handlers/AgentIpcHandler.js';
 import { registerWorkspaceIpcHandlers } from './handlers/WorkspaceIpcHandler.js';
 import { registerArtifactIpcHandlers } from './handlers/ArtifactIpcHandler.js';
-import { registerSessionIpcHandlers } from './handlers/SessionIpcHandler.js';
+import { registerConversationIpcHandlers } from './handlers/ConversationIpcHandler.js';
 import { registerSkillPackIpcHandlers } from './handlers/SkillPackIpcHandler.js';
 
 export interface IpcRouterConfig {
   workspaceManagerBaseUrl: string;
-  sessionServiceBaseUrl: string;
+  sessionServiceBaseUrl: string; // kept for AgentServiceConfig compatibility
   skillRegistryBaseUrl: string;
+  /** Identifies the local user to the conversation service. No auth in desktop — defaults to 'local'. */
+  userId: string;
 }
 
 export class IpcRouter {
@@ -45,7 +47,7 @@ export class IpcRouter {
     registerAgentIpcHandlers(this.agentRegistry, this.streamBridge);
     registerWorkspaceIpcHandlers(this.workspaceClient);
     registerArtifactIpcHandlers(this.config.workspaceManagerBaseUrl);
-    registerSessionIpcHandlers(this.config.sessionServiceBaseUrl);
+    registerConversationIpcHandlers(this.config.sessionServiceBaseUrl, this.config.userId);
     registerSkillPackIpcHandlers(this.config.skillRegistryBaseUrl);
   }
 }

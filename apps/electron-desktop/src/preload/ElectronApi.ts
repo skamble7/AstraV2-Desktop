@@ -44,11 +44,11 @@ export interface ArtifactData {
   updated_at: string;
 }
 
-export interface SessionData {
-  session_id: string;
+export interface ConversationData {
+  conversation_id: string;
   workspace_id: string;
-  title?: string;
-  messages: unknown[];
+  name?: string;
+  message_count: number;
   created_at: string;
   updated_at: string;
 }
@@ -105,10 +105,29 @@ export interface ElectronAPI {
   listArtifacts(workspaceId: string): Promise<ArtifactData[]>;
   getArtifact(workspaceId: string, artifactId: string): Promise<ArtifactData>;
 
-  // ─── Session Operations ───────────────────────────────────────────────────
+  // ─── Conversation Operations ──────────────────────────────────────────────
 
-  listSessions(workspaceId: string): Promise<SessionData[]>;
-  createSession(workspaceId: string, title?: string): Promise<SessionData>;
+  listConversations(
+    workspaceId: string,
+    userId: string
+  ): Promise<{ conversations: ConversationData[]; next_cursor: string | null }>;
+
+  createConversation(workspaceId: string, name?: string): Promise<ConversationData>;
+
+  renameConversation(conversationId: string, name: string): Promise<ConversationData>;
+
+  deleteConversation(conversationId: string): Promise<void>;
+
+  loadMoreConversations(
+    workspaceId: string,
+    userId: string,
+    cursor: string
+  ): Promise<{ conversations: ConversationData[]; next_cursor: string | null }>;
+
+  /** Push event — conversation auto-named by agent. Returns unsubscribe fn. */
+  onConversationRenamed(
+    callback: (payload: { conversation_id: string; name: string }) => void
+  ): Unsubscribe;
 
   // ─── Skill Pack Operations ────────────────────────────────────────────────
 

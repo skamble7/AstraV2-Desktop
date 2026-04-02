@@ -8,7 +8,7 @@ export type {
   ElectronAPI,
   WorkspaceData,
   ArtifactData,
-  SessionData,
+  ConversationData,
   SkillPackData,
 } from '../../preload/ElectronApi.js';
 

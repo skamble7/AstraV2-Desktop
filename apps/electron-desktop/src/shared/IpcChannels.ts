@@ -36,9 +36,15 @@ export const IPC_CHANNELS = {
   ARTIFACT_LIST: 'artifact:list',
   ARTIFACT_GET: 'artifact:get',
 
-  // Session operations (renderer → main, invoke)
-  SESSION_LIST: 'session:list',
-  SESSION_CREATE: 'session:create',
+  // Conversation operations (renderer → main, invoke)
+  CONVERSATION_LIST: 'conversation:list',
+  CONVERSATION_CREATE: 'conversation:create',
+  CONVERSATION_RENAME: 'conversation:rename',
+  CONVERSATION_DELETE: 'conversation:delete',
+  CONVERSATION_LOAD_MORE: 'conversation:load-more',
+
+  // Conversation push events (main → renderer)
+  CONVERSATION_RENAMED: 'conversation:renamed',
 
   // Skill pack operations (renderer → main, invoke)
   SKILL_PACK_LIST: 'skill-pack:list',
