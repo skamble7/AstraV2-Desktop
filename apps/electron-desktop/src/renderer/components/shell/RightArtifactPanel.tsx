@@ -75,6 +75,8 @@ interface SectionHeaderProps {
 }
 
 function SectionHeader({ title, open, onToggle }: SectionHeaderProps): React.ReactElement {
+  const themeStyle = useAppStore((s) => s.themeStyle);
+  const np = themeStyle === 'newspaper';
   return (
     <button
       onClick={onToggle}
@@ -94,7 +96,7 @@ function SectionHeader({ title, open, onToggle }: SectionHeaderProps): React.Rea
     >
       <span
         style={{
-          fontSize: '11px',
+          fontSize: np ? '13px' : '11px',
           fontWeight: 600,
           color: 'var(--t1)',
           textTransform: 'uppercase',
@@ -125,6 +127,8 @@ function SectionHeader({ title, open, onToggle }: SectionHeaderProps): React.Rea
 // ---------------------------------------------------------------------------
 
 function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElement {
+  const themeStyle = useAppStore((s) => s.themeStyle);
+  const np = themeStyle === 'newspaper';
   const selectArtifact = useAppStore((state) => state.selectArtifact);
   const selectedArtifactId = useAppStore((state) => state.selectedArtifactId);
   const navigateTo = useAppStore((state) => state.navigateTo);
@@ -186,7 +190,7 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
-            fontSize: '12px',
+            fontSize: np ? '14px' : '12px',
             fontWeight: 600,
             color: 'var(--t0)',
             overflow: 'hidden',
@@ -197,7 +201,7 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
         >
           {displayName}
         </div>
-        <div style={{ fontSize: '11px', color: 'var(--t2)', marginTop: '2px', lineHeight: 1.2 }}>
+        <div style={{ fontSize: np ? '12px' : '11px', color: 'var(--t2)', marginTop: '2px', lineHeight: 1.2 }}>
           {typeLabel}
         </div>
       </div>
@@ -211,6 +215,8 @@ function ArtifactCard({ artifact }: { artifact: ArtifactData }): React.ReactElem
 // ---------------------------------------------------------------------------
 
 export function RightArtifactPanel({ width = 280 }: { width?: number }): React.ReactElement {
+  const themeStyle = useAppStore((s) => s.themeStyle);
+  const np = themeStyle === 'newspaper';
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const artifacts = useAppStore((state) =>
     currentWorkspaceId ? (state.artifactsByWorkspace[currentWorkspaceId] ?? []) : []
@@ -262,7 +268,7 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
         {artifactsOpen && (
           <div style={{ flex: 1, overflow: 'auto', padding: '4px 6px' }}>
             {artifacts.length === 0 ? (
-              <p style={{ fontSize: '12px', color: 'var(--t2)', padding: '8px' }}>No artifacts yet</p>
+              <p style={{ fontSize: np ? '14px' : '12px', color: 'var(--t2)', padding: '8px' }}>No artifacts yet</p>
             ) : (
               artifacts.map((artifact) => (
                 <ArtifactCard key={artifact.id} artifact={artifact} />
@@ -292,7 +298,7 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
             {planSteps.length > 0 ? (
               <PlanProgressBar />
             ) : (
-              <p style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
+              <p style={{ fontSize: np ? '14px' : '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
                 See task progress for longer tasks.
               </p>
             )}

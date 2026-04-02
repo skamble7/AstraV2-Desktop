@@ -23,6 +23,8 @@ interface WorkspaceSidebarProps {
 }
 
 export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSidebarProps): React.ReactElement {
+  const themeStyle = useAppStore((state) => state.themeStyle);
+  const np = themeStyle === 'newspaper';
   const activeWorkspace = useAppStore((state) => state.activeWorkspace);
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const conversations = useAppStore((state) =>
@@ -186,10 +188,10 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
             {getInitials(activeWorkspace.name)}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--t0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <p style={{ fontSize: np ? '15px' : '13px', fontWeight: 600, color: 'var(--t0)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {activeWorkspace.name}
             </p>
-            <p style={{ fontSize: '11px', color: 'var(--t2)' }}>{activeWorkspace.domain_type}</p>
+            <p style={{ fontSize: np ? '12px' : '11px', color: 'var(--t2)' }}>{activeWorkspace.domain_type}</p>
           </div>
         </div>
       )}
@@ -208,7 +210,7 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '13px',
+            fontSize: np ? '15px' : '13px',
             fontWeight: 500,
             color: 'var(--t0)',
             textAlign: 'left',
@@ -233,7 +235,7 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '13px',
+            fontSize: np ? '15px' : '13px',
             color: 'var(--t1)',
             textAlign: 'left',
           }}
@@ -259,7 +261,7 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
-            fontSize: '13px',
+            fontSize: np ? '15px' : '13px',
             color: isCustomizeActive ? 'var(--t0)' : 'var(--t1)',
             fontWeight: isCustomizeActive ? 500 : 400,
             textAlign: 'left',
@@ -332,7 +334,7 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
-              fontSize: '13px',
+              fontSize: np ? '15px' : '13px',
               color: 'var(--t1)',
               textAlign: 'left',
             }}
@@ -349,7 +351,7 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
 
       {/* Recents section */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '4px 8px' }}>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--t2)', padding: '6px 8px 4px', letterSpacing: '0.04em' }}>
+        <p style={{ fontSize: np ? '12px' : '11px', fontWeight: 600, color: 'var(--t2)', padding: '6px 8px 4px', letterSpacing: '0.04em' }}>
           Recents
         </p>
 
@@ -415,7 +417,7 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
                       }}
                     >
                       <p style={{
-                        fontSize: '12px',
+                        fontSize: np ? '14px' : '12px',
                         color: isActive ? 'var(--t0)' : 'var(--t1)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',

@@ -51,6 +51,58 @@ body.light {
   --border-strong: rgba(0, 0, 0, 0.14);
 }
 
+/* ─── Newspaper Theme — Dark (default) ──────────────────────────────────────── */
+body.newspaper {
+  --bg0: #1a1710;
+  --bg1: #211e16;
+  --bg2: #2a2720;
+  --bg3: #333029;
+  --bg4: #3d3a32;
+  --bg5: #48443c;
+
+  --t0: #e8e0c8;
+  --t1: #b0a080;
+  --t2: #7a6e5a;
+
+  --border: rgba(232, 224, 200, 0.08);
+  --border-strong: rgba(232, 224, 200, 0.14);
+
+  --accent-blue: #7ca4c4;
+  --accent-purple: #9d80c0;
+  --accent-green: #6aaa70;
+  --accent-amber: #d4a035;
+  --accent-red: #c05050;
+  --accent-teal: #5aaa90;
+  --accent-pink: #c06090;
+
+  --font-reading: Georgia, 'Times New Roman', 'Palatino Linotype', serif;
+}
+
+/* ─── Newspaper Theme — Light ────────────────────────────────────────────────── */
+body.newspaper.light {
+  --bg0: #f4efe4;
+  --bg1: #faf6ee;
+  --bg2: #ede8dc;
+  --bg3: #e2dcd0;
+  --bg4: #d4cec0;
+  --bg5: #c8c2b4;
+
+  --t0: #1a1610;
+  --t1: #5a5040;
+  --t2: #9a9080;
+
+  --border: rgba(26, 22, 16, 0.08);
+  --border-strong: rgba(26, 22, 16, 0.14);
+
+  --accent-blue: #2a5a8a;
+  --accent-purple: #5a3a8a;
+  --accent-green: #2a6a30;
+  --accent-amber: #8a6010;
+  --accent-red: #8a2020;
+  --accent-teal: #1a6a50;
+  --accent-pink: #8a3060;
+}
+
 /* ─── Base Styles ────────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
@@ -73,6 +125,13 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Newspaper font override ────────────────────────────────────────────────── */
+body.newspaper {
+  font-family: Georgia, 'Times New Roman', 'Palatino Linotype', serif;
+  font-size: 15px;
+  line-height: 1.7;
 }
 
 /* ─── Scrollbar Styles ────────────────────────────────────────────────────────── */

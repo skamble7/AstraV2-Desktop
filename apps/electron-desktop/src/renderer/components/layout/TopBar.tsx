@@ -3,13 +3,14 @@
  *
  * Left: macOS traffic-light spacer → Back / Forward / Home nav buttons → ASTRA logo
  * Center: context-sensitive breadcrumb
- * Right: Theme toggle
+ * Right: Settings gear icon
  *
  * The 76px left padding clears macOS traffic-light buttons (hiddenInset titlebar).
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppStore } from '../../store/index.js';
+import { SettingsModal } from './SettingsModal.js';
 
 // ─── Nav Button ───────────────────────────────────────────────────────────────
 
@@ -108,7 +109,7 @@ function AstraLogo(): React.ReactElement {
         <path d="M5 10 L10 5 L15 10 L10 15 Z" stroke="var(--accent-blue)" strokeWidth="1.5" fill="none" />
         <circle cx="10" cy="10" r="2" fill="var(--accent-blue)" />
       </svg>
-      <span style={{ fontWeight: 700, fontSize: '15px', letterSpacing: '-0.01em', color: 'var(--t0)' }}>
+      <span style={{ fontWeight: 700, fontSize: '15px', letterSpacing: '-0.01em', color: 'var(--t0)', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
         ASTRA
       </span>
       <span
@@ -120,6 +121,7 @@ function AstraLogo(): React.ReactElement {
           padding: '1px 5px',
           borderRadius: '4px',
           letterSpacing: '0.02em',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
         v2
@@ -136,9 +138,9 @@ function Breadcrumb(): React.ReactElement {
   const navigateTo = useAppStore((state) => state.navigateTo);
   const navigateHome = useAppStore((state) => state.navigateHome);
 
-  const crumb: React.CSSProperties = { color: 'var(--t2)', fontSize: '13px', cursor: 'pointer' };
-  const activeCrumb: React.CSSProperties = { color: 'var(--t1)', fontSize: '13px' };
-  const sep: React.CSSProperties = { color: 'var(--t2)', fontSize: '13px', padding: '0 4px' };
+  const crumb: React.CSSProperties = { color: 'var(--t2)', fontSize: '13px', cursor: 'pointer', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' };
+  const activeCrumb: React.CSSProperties = { color: 'var(--t1)', fontSize: '13px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' };
+  const sep: React.CSSProperties = { color: 'var(--t2)', fontSize: '13px', padding: '0 4px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' };
 
   if (currentScreen === 'home') return <></>;
 
@@ -186,16 +188,13 @@ function Breadcrumb(): React.ReactElement {
   );
 }
 
-// ─── Theme Toggle ─────────────────────────────────────────────────────────────
+// ─── Settings Button ──────────────────────────────────────────────────────────
 
-function ThemeToggle(): React.ReactElement {
-  const isLightTheme = useAppStore((state) => state.isLightTheme);
-  const toggleTheme = useAppStore((state) => state.toggleTheme);
-
+function SettingsButton({ onClick }: { onClick: () => void }): React.ReactElement {
   return (
     <button
-      onClick={toggleTheme}
-      title={isLightTheme ? 'Switch to dark mode' : 'Switch to light mode'}
+      onClick={onClick}
+      title="Settings"
       style={{
         background: 'none',
         border: 'none',
@@ -206,20 +205,21 @@ function ThemeToggle(): React.ReactElement {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        transition: 'background 0.15s',
+        transition: 'background 0.15s, color 0.15s',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg3)')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--bg3)';
+        e.currentTarget.style.color = 'var(--t0)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'none';
+        e.currentTarget.style.color = 'var(--t1)';
+      }}
     >
-      {isLightTheme ? (
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8z" />
-        </svg>
-      ) : (
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" />
-        </svg>
-      )}
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="8" cy="8" r="2.5" />
+        <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M12.95 3.05l-1.06 1.06M4.11 11.89l-1.06 1.06" />
+      </svg>
     </button>
   );
 }
@@ -228,67 +228,70 @@ function ThemeToggle(): React.ReactElement {
 
 export function TopBar(): React.ReactElement {
   const navigateHome = useAppStore((state) => state.navigateHome);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
-    <header
-      style={{
-        height: '49px',
-        minHeight: '49px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'var(--bg1)',
-        borderBottom: '0.5px solid var(--border)',
-        WebkitAppRegion: 'drag',
-        // Extra right padding for symmetry
-        paddingRight: '12px',
-      } as React.CSSProperties}
-    >
-      {/* Left: traffic-light spacer + nav buttons + logo */}
-      <div
+    <>
+      <header
         style={{
+          height: '49px',
+          minHeight: '49px',
           display: 'flex',
           alignItems: 'center',
-          // 76px clears macOS hiddenInset traffic lights
-          paddingLeft: '76px',
-          gap: '4px',
-          WebkitAppRegion: 'no-drag',
+          justifyContent: 'space-between',
+          background: 'var(--bg1)',
+          borderBottom: '0.5px solid var(--border)',
+          WebkitAppRegion: 'drag',
+          paddingRight: '12px',
         } as React.CSSProperties}
       >
-        <NavigationControls />
+        {/* Left: traffic-light spacer + nav buttons + logo */}
         <div
-          style={{ cursor: 'pointer' }}
-          onClick={navigateHome}
-          role="button"
-          tabIndex={0}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            paddingLeft: '76px',
+            gap: '4px',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
         >
-          <AstraLogo />
+          <NavigationControls />
+          <div
+            style={{ cursor: 'pointer' }}
+            onClick={navigateHome}
+            role="button"
+            tabIndex={0}
+          >
+            <AstraLogo />
+          </div>
         </div>
-      </div>
 
-      {/* Center: Breadcrumb */}
-      <div
-        style={{
-          position: 'absolute',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          WebkitAppRegion: 'no-drag',
-        } as React.CSSProperties}
-      >
-        <Breadcrumb />
-      </div>
+        {/* Center: Breadcrumb */}
+        <div
+          style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+        >
+          <Breadcrumb />
+        </div>
 
-      {/* Right: Controls */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          WebkitAppRegion: 'no-drag',
-        } as React.CSSProperties}
-      >
-        <ThemeToggle />
-      </div>
-    </header>
+        {/* Right: Settings */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            WebkitAppRegion: 'no-drag',
+          } as React.CSSProperties}
+        >
+          <SettingsButton onClick={() => setSettingsOpen(true)} />
+        </div>
+      </header>
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+    </>
   );
 }

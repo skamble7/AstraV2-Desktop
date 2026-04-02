@@ -35,6 +35,7 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
   const createConversation = useAppStore((state) => state.createConversation);
   const renameConversation = useAppStore((state) => state.renameConversation);
 
+  const themeStyle = useAppStore((state) => state.themeStyle);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Hydrate messages from the backend whenever the active conversation changes.
@@ -128,7 +129,7 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '16px 16px 8px 16px',
+          padding: themeStyle === 'newspaper' ? '32px 48px 16px 48px' : '16px 16px 8px 16px',
           display: 'flex',
           flexDirection: 'column',
         }}

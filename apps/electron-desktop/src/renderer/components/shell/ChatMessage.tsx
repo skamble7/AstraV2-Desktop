@@ -4,19 +4,22 @@
  * Rules:
  * - While isStreaming === true: render content as plain text (no markdown parse) to avoid flicker
  * - While isStreaming === false: render with react-markdown for formatted output
- * - Assistant messages appear on the left with a blue avatar
- * - User messages appear on the right with initials avatar
+ * - VS Code style: chat bubbles, left (assistant) / right (user) alignment
+ * - Newspaper style: editorial layout — full-width, left-aligned, byline + hairline, serif body
  */
 
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ChatMessage as ChatMessageType } from '../../store/slices/conversationSlice.js';
+import { useAppStore } from '../../store/index.js';
 
 interface ChatMessageProps {
   message: ChatMessageType;
 }
 
-export function ChatMessage({ message }: ChatMessageProps): React.ReactElement {
+// ─── VS Code Style ────────────────────────────────────────────────────────────
+
+function VsCodeMessage({ message }: ChatMessageProps): React.ReactElement {
   const isAssistant = message.role === 'assistant';
 
   return (
@@ -115,4 +118,129 @@ export function ChatMessage({ message }: ChatMessageProps): React.ReactElement {
       )}
     </div>
   );
+}
+
+// ─── Newspaper Style ──────────────────────────────────────────────────────────
+
+function NewspaperMessage({ message }: ChatMessageProps): React.ReactElement {
+  const isAssistant = message.role === 'assistant';
+
+  // User messages: right-aligned bubble (like Claude desktop)
+  if (!isAssistant) {
+    return (
+      <div
+        style={{
+          width: '100%',
+          marginBottom: '28px',
+          display: 'flex',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '72%',
+            background: 'var(--bg3)',
+            border: '0.5px solid var(--border-strong)',
+            borderRadius: '16px 4px 16px 16px',
+            padding: '12px 16px',
+            fontSize: '15px',
+            lineHeight: 1.7,
+            color: 'var(--t0)',
+            fontFamily: 'Georgia, "Times New Roman", "Palatino Linotype", serif',
+            wordBreak: 'break-word',
+          }}
+        >
+          {message.isStreaming ? message.content : (
+            <div className="markdown-content">
+              <ReactMarkdown>{message.content || '\u00a0'}</ReactMarkdown>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Assistant messages: editorial layout — byline + hairline rule + full-width serif body
+  return (
+    <div style={{ width: '100%', marginBottom: '32px' }}>
+
+      {/* Byline row: label + hairline rule */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '10px',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--accent-blue)',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            flexShrink: 0,
+          }}
+        >
+          ASTRA
+        </span>
+        <div
+          style={{
+            flex: 1,
+            height: '0.5px',
+            background: 'var(--border-strong)',
+          }}
+        />
+      </div>
+
+      {/* Body content */}
+      <div
+        style={{
+          fontSize: '16px',
+          lineHeight: 1.8,
+          color: 'var(--t0)',
+          fontFamily: 'Georgia, "Times New Roman", "Palatino Linotype", serif',
+          wordBreak: 'break-word',
+        }}
+      >
+        {message.isStreaming ? (
+          <span>
+            {message.content}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="var(--accent-blue)"
+              style={{
+                display: 'inline-block',
+                marginLeft: '4px',
+                verticalAlign: 'middle',
+                flexShrink: 0,
+                animation: 'astra-star-pulse 1.1s ease-in-out infinite',
+              }}
+            >
+              <path d="M6 0 L7.1 4.9 L12 6 L7.1 7.1 L6 12 L4.9 7.1 L0 6 L4.9 4.9 Z" />
+            </svg>
+          </span>
+        ) : (
+          <div className="markdown-content">
+            <ReactMarkdown>{message.content || '\u00a0'}</ReactMarkdown>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ChatMessage ──────────────────────────────────────────────────────────────
+
+export function ChatMessage({ message }: ChatMessageProps): React.ReactElement {
+  const themeStyle = useAppStore((s) => s.themeStyle);
+
+  if (themeStyle === 'newspaper') {
+    return <NewspaperMessage message={message} />;
+  }
+  return <VsCodeMessage message={message} />;
 }
