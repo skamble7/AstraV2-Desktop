@@ -12,6 +12,7 @@ import { useAppStore } from '../store/index.js';
 import { WorkspaceSidebar } from '../components/layout/WorkspaceSidebar.js';
 import { ChatPanel } from '../components/shell/ChatPanel.js';
 import { RightArtifactPanel } from '../components/shell/RightArtifactPanel.js';
+import { CustomizePanel } from '../components/customize/CustomizePanel.js';
 
 const RIGHT_PANEL_MIN = 200;
 const RIGHT_PANEL_MAX = 480;
@@ -35,6 +36,8 @@ export function WorkspaceShellScreen(): React.ReactElement {
     } catch { /* ignore */ }
     return RIGHT_PANEL_DEFAULT;
   });
+
+  const [showCustomize, setShowCustomize] = useState(false);
 
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -106,50 +109,59 @@ export function WorkspaceShellScreen(): React.ReactElement {
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-      <WorkspaceSidebar />
-      <ChatPanel workspaceId={currentWorkspaceId} conversationId={activeConversationId} />
+      <WorkspaceSidebar
+        onCustomize={() => setShowCustomize((v) => !v)}
+        isCustomizeActive={showCustomize}
+      />
 
-      {/* Drag handle */}
-      <div
-        onMouseDown={onMouseDown}
-        title="Drag to resize"
-        style={{
-          width: '12px',
-          flexShrink: 0,
-          cursor: 'col-resize',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--bg1)',
-          borderLeft: '0.5px solid var(--border)',
-          borderRight: '0.5px solid var(--border)',
-          userSelect: 'none',
-          position: 'relative',
-        }}
-        onMouseEnter={(e) => {
-          const grip = e.currentTarget.querySelector('.grip-pill') as HTMLElement | null;
-          if (grip) grip.style.background = 'var(--accent-blue)';
-        }}
-        onMouseLeave={(e) => {
-          const grip = e.currentTarget.querySelector('.grip-pill') as HTMLElement | null;
-          if (grip) grip.style.background = 'var(--border-strong)';
-        }}
-      >
-        {/* Pill grip — matches screenshot */}
-        <div
-          className="grip-pill"
-          style={{
-            width: '4px',
-            height: '32px',
-            borderRadius: '2px',
-            background: 'var(--border-strong)',
-            transition: 'background 0.15s',
-            pointerEvents: 'none',
-          }}
-        />
-      </div>
+      {showCustomize ? (
+        <CustomizePanel onBack={() => setShowCustomize(false)} />
+      ) : (
+        <>
+          <ChatPanel workspaceId={currentWorkspaceId} conversationId={activeConversationId} />
 
-      <RightArtifactPanel width={rightWidth} />
+          {/* Drag handle */}
+          <div
+            onMouseDown={onMouseDown}
+            title="Drag to resize"
+            style={{
+              width: '12px',
+              flexShrink: 0,
+              cursor: 'col-resize',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--bg1)',
+              borderLeft: '0.5px solid var(--border)',
+              borderRight: '0.5px solid var(--border)',
+              userSelect: 'none',
+              position: 'relative',
+            }}
+            onMouseEnter={(e) => {
+              const grip = e.currentTarget.querySelector('.grip-pill') as HTMLElement | null;
+              if (grip) grip.style.background = 'var(--accent-blue)';
+            }}
+            onMouseLeave={(e) => {
+              const grip = e.currentTarget.querySelector('.grip-pill') as HTMLElement | null;
+              if (grip) grip.style.background = 'var(--border-strong)';
+            }}
+          >
+            <div
+              className="grip-pill"
+              style={{
+                width: '4px',
+                height: '32px',
+                borderRadius: '2px',
+                background: 'var(--border-strong)',
+                transition: 'background 0.15s',
+                pointerEvents: 'none',
+              }}
+            />
+          </div>
+
+          <RightArtifactPanel width={rightWidth} />
+        </>
+      )}
     </div>
   );
 }

@@ -17,7 +17,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/index.js';
 import { getInitials, getWorkspaceColor } from '../../lib/utils.js';
 
-export function WorkspaceSidebar(): React.ReactElement {
+interface WorkspaceSidebarProps {
+  onCustomize?: () => void;
+  isCustomizeActive?: boolean;
+}
+
+export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSidebarProps): React.ReactElement {
   const activeWorkspace = useAppStore((state) => state.activeWorkspace);
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const conversations = useAppStore((state) =>
@@ -243,22 +248,24 @@ export function WorkspaceSidebar(): React.ReactElement {
         </button>
 
         <button
+          onClick={onCustomize}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
             width: '100%',
             padding: '8px 10px',
-            background: 'none',
+            background: isCustomizeActive ? 'var(--bg2)' : 'none',
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
             fontSize: '13px',
-            color: 'var(--t1)',
+            color: isCustomizeActive ? 'var(--t0)' : 'var(--t1)',
+            fontWeight: isCustomizeActive ? 500 : 400,
             textAlign: 'left',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          onMouseEnter={(e) => { if (!isCustomizeActive) e.currentTarget.style.background = 'var(--bg2)'; }}
+          onMouseLeave={(e) => { if (!isCustomizeActive) e.currentTarget.style.background = 'none'; }}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
             <rect x="2" y="7" width="12" height="1.5" rx="0.75" fill="currentColor"/>
@@ -412,11 +419,6 @@ export function WorkspaceSidebar(): React.ReactElement {
                         paddingRight: (isHovered || menuOpen) ? '20px' : '0',
                       }}>
                         {conversation.name ?? 'Untitled conversation'}
-                      </p>
-                      <p style={{ fontSize: '10px', color: 'var(--t3)', margin: '1px 0 4px 0' }}>
-                        {conversation.message_count > 0
-                          ? `${conversation.message_count} message${conversation.message_count === 1 ? '' : 's'}`
-                          : 'No messages'}
                       </p>
                     </button>
 
