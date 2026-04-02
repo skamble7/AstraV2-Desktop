@@ -136,11 +136,6 @@ export function WorkspaceSidebar(): React.ReactElement {
     setDeleteConfirmId(null);
   };
 
-  const navItems = [
-    { label: 'Artifacts', icon: '◎', screen: 'artifact-detail' as const },
-    { label: 'Runs', icon: '↺', screen: 'workspace' as const },
-  ];
-
   return (
     <aside
       style={{
@@ -190,9 +185,127 @@ export function WorkspaceSidebar(): React.ReactElement {
         </div>
       )}
 
-      {/* Navigation */}
-      <div style={{ padding: '8px 6px' }}>
-        {navItems.map((item) => (
+      {/* Top action: New chat */}
+      <div style={{ padding: '10px 8px 4px' }}>
+        <button
+          onClick={() => void handleNewConversation()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            width: '100%',
+            padding: '8px 10px',
+            background: 'none',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 500,
+            color: 'var(--t0)',
+            textAlign: 'left',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          New chat
+        </button>
+
+        <button
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            width: '100%',
+            padding: '8px 10px',
+            background: 'none',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            color: 'var(--t1)',
+            textAlign: 'left',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+            <circle cx="6.5" cy="6.5" r="3.5" stroke="currentColor" strokeWidth="1.4"/>
+            <path d="M10.5 10.5l2.5 2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+          Search
+        </button>
+
+        <button
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            width: '100%',
+            padding: '8px 10px',
+            background: 'none',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            color: 'var(--t1)',
+            textAlign: 'left',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+            <rect x="2" y="7" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect x="2" y="3.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect x="2" y="10.5" width="12" height="1.5" rx="0.75" fill="currentColor"/>
+            <circle cx="5.5" cy="4.25" r="1.5" fill="var(--bg1)" stroke="currentColor" strokeWidth="1.2"/>
+            <circle cx="10.5" cy="7.75" r="1.5" fill="var(--bg1)" stroke="currentColor" strokeWidth="1.2"/>
+            <circle cx="6.5" cy="11.25" r="1.5" fill="var(--bg1)" stroke="currentColor" strokeWidth="1.2"/>
+          </svg>
+          Customize
+        </button>
+      </div>
+
+      <div style={{ height: '0.5px', background: 'var(--border)', margin: '4px 8px' }} />
+
+      {/* Primary nav items */}
+      <div style={{ padding: '4px 8px' }}>
+        {([
+          {
+            label: 'Chats',
+            screen: 'workspace' as const,
+            icon: (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v7A1.5 1.5 0 0 1 12.5 12H9l-3 2v-2H3.5A1.5 1.5 0 0 1 2 10.5v-7Z" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Orbits',
+            screen: 'workspace' as const,
+            icon: (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.3"/>
+                <ellipse cx="8" cy="8" rx="6" ry="3" stroke="currentColor" strokeWidth="1.3"/>
+                <ellipse cx="8" cy="8" rx="6" ry="3" transform="rotate(60 8 8)" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            ),
+          },
+          {
+            label: 'Artifacts',
+            screen: 'artifact-detail' as const,
+            icon: (
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="2" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="8.5" y="2" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="2" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+                <rect x="8.5" y="8.5" width="5.5" height="5.5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/>
+              </svg>
+            ),
+          },
+        ] as { label: string; screen: 'workspace' | 'artifact-detail'; icon: React.ReactElement }[]).map((item) => (
           <button
             key={item.label}
             onClick={() => {
@@ -201,33 +314,32 @@ export function WorkspaceSidebar(): React.ReactElement {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '10px',
               width: '100%',
-              padding: '7px 8px',
+              padding: '8px 10px',
               background: 'none',
               border: 'none',
-              borderRadius: '7px',
+              borderRadius: '8px',
               cursor: 'pointer',
               fontSize: '13px',
               color: 'var(--t1)',
               textAlign: 'left',
-              transition: 'background 0.1s',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg2)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
           >
-            <span style={{ fontSize: '14px', width: '16px', textAlign: 'center' }}>{item.icon}</span>
+            <span style={{ flexShrink: 0 }}>{item.icon}</span>
             {item.label}
           </button>
         ))}
       </div>
 
-      <div style={{ height: '0.5px', background: 'var(--border)', margin: '4px 0' }} />
+      <div style={{ height: '0.5px', background: 'var(--border)', margin: '4px 8px' }} />
 
-      {/* Conversations section */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '4px 6px' }}>
-        <p style={{ fontSize: '11px', color: 'var(--t2)', padding: '6px 8px 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Conversations
+      {/* Recents section */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '4px 8px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--t2)', padding: '6px 8px 4px', letterSpacing: '0.04em' }}>
+          Recents
         </p>
 
         <div ref={listRef} style={{ flex: 1, overflow: 'auto' }}>
@@ -317,23 +429,6 @@ export function WorkspaceSidebar(): React.ReactElement {
           })}
         </div>
 
-        <button
-          onClick={() => void handleNewConversation()}
-          style={{
-            padding: '7px 8px',
-            background: 'none',
-            border: '0.5px solid var(--border)',
-            borderRadius: '7px',
-            color: 'var(--t1)',
-            fontSize: '12px',
-            cursor: 'pointer',
-            marginTop: '4px',
-            width: '100%',
-            textAlign: 'center',
-          }}
-        >
-          + New conversation
-        </button>
       </div>
 
       {/* Context menu */}
