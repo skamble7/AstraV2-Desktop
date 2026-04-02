@@ -32,12 +32,20 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
   const setAgentStreaming = useAppStore((state) => state.setAgentStreaming);
   const clearPlan = useAppStore((state) => state.clearPlan);
   const fetchMessages = useAppStore((state) => state.fetchMessages);
+  const createConversation = useAppStore((state) => state.createConversation);
+  const renameConversation = useAppStore((state) => state.renameConversation);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Hydrate messages from the backend whenever the active conversation changes
+  // Hydrate messages from the backend whenever the active conversation changes.
+  // Skip if the key already exists in messagesByConversation — this means the conversation
+  // was either created locally (createConversation initialises it to []) or already loaded.
+  // Using `!== undefined` rather than `length > 0` ensures we skip even for fresh empty
+  // conversations, preventing fetchMessages from racing with optimistically-appended messages.
   useEffect(() => {
     if (!conversationId) return;
+    const existing = useAppStore.getState().messagesByConversation[conversationId];
+    if (existing !== undefined) return;
     void fetchMessages(conversationId).catch((err: unknown) => {
       console.error('[ChatPanel] fetchMessages failed:', err);
     });
@@ -48,19 +56,36 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, messages[messages.length - 1]?.content?.length]);
 
-  const handleSendMessage = (content: string): void => {
-    if (!conversationId) return;
+  const handleSendMessage = async (content: string): Promise<void> => {
+    // If no conversation is active, create one on-the-fly before sending.
+    // This lets the user just type and hit send without clicking "New chat" first.
+    let activeConvId = conversationId;
+    if (!activeConvId) {
+      const newConv = await createConversation(workspaceId);
+      activeConvId = newConv.conversation_id;
+    }
 
-    appendUserMessage(conversationId, content);
-    startAssistantMessage(conversationId);
-    setAgentStreaming(true, conversationId);
+    const isFirstMessage = messages.length === 0;
+
+    appendUserMessage(activeConvId, content);
+    startAssistantMessage(activeConvId);
+    setAgentStreaming(true, activeConvId);
     clearPlan();
 
     void window.electronAPI.sendMessage({
       workspace_id: workspaceId,
       message: content,
-      session_id: conversationId, // field name stays session_id for AgentIpcHandler compatibility
+      session_id: activeConvId, // field name stays session_id for AgentIpcHandler compatibility
     });
+
+    // Auto-name the conversation from the first message — best-effort, errors ignored
+    if (isFirstMessage) {
+      const trimmed = content.trim();
+      const name = trimmed.length > 50
+        ? (trimmed.slice(0, 50).replace(/\s+\S*$/, '') || trimmed.slice(0, 50))
+        : trimmed;
+      renameConversation(workspaceId, activeConvId, name).catch(() => { /* best-effort */ });
+    }
   };
 
   const handleRunPack = (packKey: string, packVersion: string): void => {

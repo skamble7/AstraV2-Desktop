@@ -21,7 +21,6 @@ const RIGHT_PANEL_DEFAULT = 280;
 export function WorkspaceShellScreen(): React.ReactElement {
   const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const activeConversationId = useAppStore((state) => state.activeConversationId);
-  const createConversation = useAppStore((state) => state.createConversation);
   const setActiveConversation = useAppStore((state) => state.setActiveConversation);
   const fetchConversations = useAppStore((state) => state.fetchConversations);
 
@@ -76,24 +75,24 @@ export function WorkspaceShellScreen(): React.ReactElement {
     };
   }, []);
 
-  // Fetch conversations, then pick or create one — avoids the race where we create
-  // a duplicate conversation before fetchConversations resolves.
+  // Fetch conversations on workspace open and select the first if any exist.
+  // Reset active conversation immediately so we never show a stale conversation
+  // from the previous workspace while the fetch is in flight.
   useEffect(() => {
     if (!currentWorkspaceId) return;
+
+    setActiveConversation(null);
 
     void (async () => {
       try {
         await fetchConversations(currentWorkspaceId);
       } catch (err) {
         console.error('[WorkspaceShellScreen] fetchConversations failed:', err);
-        // Fall through so we still auto-create if the service is unavailable
       }
       const latestConversations =
         useAppStore.getState().conversationsByWorkspace[currentWorkspaceId] ?? [];
       if (latestConversations.length > 0) {
         setActiveConversation(latestConversations[0]!.conversation_id);
-      } else {
-        await createConversation(currentWorkspaceId);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -354,6 +354,11 @@ export function WorkspaceSidebar({ onCustomize, isCustomizeActive }: WorkspaceSi
         </p>
 
         <div ref={listRef} style={{ flex: 1, overflow: 'auto' }}>
+          {conversations.length === 0 && (
+            <p style={{ fontSize: '12px', color: 'var(--t3)', padding: '6px 8px' }}>
+              No conversations yet. Click "New chat" to start.
+            </p>
+          )}
           {conversations.map((conversation) => {
             const isActive = activeConversationId === conversation.conversation_id;
             const isRenaming = renamingId === conversation.conversation_id;
