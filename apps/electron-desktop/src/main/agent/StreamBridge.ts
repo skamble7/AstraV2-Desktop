@@ -99,6 +99,13 @@ export class StreamBridge {
         });
         break;
 
+      case 'plan:awaiting_approval':
+        this.windowManager.sendToRenderer(IPC_CHANNELS.AGENT_PLAN_APPROVAL_REQUEST, {
+          token: event.token,
+          steps: event.steps,
+        });
+        break;
+
       case 'agent:ask_user':
         this.windowManager.sendToRenderer(IPC_CHANNELS.AGENT_ASK_USER, {
           token: event.token,
@@ -111,6 +118,12 @@ export class StreamBridge {
       case 'agent:notification':
         this.windowManager.sendToRenderer(IPC_CHANNELS.AGENT_TOKEN, {
           delta: `\n${event.message}\n`,
+        });
+        break;
+
+      case 'agent:raw_artifact_uploaded':
+        this.windowManager.sendToRenderer(IPC_CHANNELS.AGENT_TOKEN, {
+          delta: `\n📎 File artifact stored — **${event.filename}** (${event.mime_type})\n`,
         });
         break;
     }

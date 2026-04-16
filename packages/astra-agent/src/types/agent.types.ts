@@ -67,6 +67,7 @@ export interface AgentServiceConfig {
   sessionServiceBaseUrl: string;
   workspaceManagerBaseUrl: string;
   configForgeBaseUrl: string;
+  artifactServiceBaseUrl: string;
   notificationServiceWsUrl: string;
   /**
    * Config-forge ref key for the LLM config used by the planner and all agent LLM calls.

@@ -24,6 +24,19 @@ export interface LlmExecution {
 
 export type SkillExecution = McpExecution | LlmExecution;
 
+/**
+ * Describes how to extract and store a file payload from a general skill's tool result.
+ * Only present on skills with domain: 'general' that produce file output (Branch B).
+ */
+export interface RawArtifactEnvelope {
+  /** Whether the tool result carries the file as a base64 string or a URL to fetch. */
+  content_type: 'base64' | 'url';
+  /** MIME type of the file, e.g. "application/pdf" or "text/csv". */
+  mime_type: string;
+  /** Filename template — supports {workspace_id}, {run_id}, {skill_name} substitutions. */
+  filename_template: string;
+}
+
 export interface RetryConfig {
   max_attempts: number;
   backoff_ms: number;
@@ -39,8 +52,11 @@ export interface SkillDocument {
   name: string;
   description: string;
   // Top-level fields present in the thin registry response:
-  domain?: string;
+  /** 'astra' → full 3-phase pipeline; 'general' → file upload or conversational result. */
+  domain?: 'astra' | 'general';
   is_artifact_skill?: boolean;
+  /** Defined only for domain:'general' skills that produce file output (Branch B). */
+  raw_artifact_envelope?: RawArtifactEnvelope;
   skill_md_body?: string;
   // Fields that may or may not be present as top-level fields:
   execution?: SkillExecution;
@@ -79,6 +95,7 @@ export interface SkillPackDocument {
 
 export interface StagedArtifact {
   kind: string;
+  name?: string;
   data: unknown;
   diagram?: string;
   narrative?: string;

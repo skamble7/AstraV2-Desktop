@@ -15,6 +15,7 @@ import type {
   AgentTokenPayload,
   AgentPlanUpdatePayload,
   AgentAskUserPayload,
+  AgentPlanApprovalRequestPayload,
   AgentRunCompletePayload,
   AgentErrorPayload,
   Unsubscribe,
@@ -40,6 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   provideInput: (token: string, value: unknown): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.AGENT_PROVIDE_INPUT, { token, value }),
 
+  approvePlan: (token: string, approved: boolean): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.AGENT_APPROVE_PLAN, { token, approved }),
+
   // ─── Event Subscriptions ──────────────────────────────────────────────────
   onToken: (callback: (p: AgentTokenPayload) => void): Unsubscribe =>
     createSubscription(IPC_CHANNELS.AGENT_TOKEN, callback),
@@ -49,6 +53,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onAskUser: (callback: (p: AgentAskUserPayload) => void): Unsubscribe =>
     createSubscription(IPC_CHANNELS.AGENT_ASK_USER, callback),
+
+  onPlanApprovalRequest: (callback: (p: AgentPlanApprovalRequestPayload) => void): Unsubscribe =>
+    createSubscription(IPC_CHANNELS.AGENT_PLAN_APPROVAL_REQUEST, callback),
 
   onRunComplete: (callback: (p: AgentRunCompletePayload) => void): Unsubscribe =>
     createSubscription(IPC_CHANNELS.AGENT_RUN_COMPLETE, callback),

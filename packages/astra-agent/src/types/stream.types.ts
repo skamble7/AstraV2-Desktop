@@ -9,6 +9,7 @@ import type { PlanStep, StepStatus } from './plan.types.js';
 export type AgentEvent =
   | TokenEvent
   | PlanStepAddedEvent
+  | PlanAwaitingApprovalEvent
   | RunStepStartedEvent
   | RunStepCompletedEvent
   | RunStepFailedEvent
@@ -16,7 +17,8 @@ export type AgentEvent =
   | RunFailedEvent
   | RunCancelledEvent
   | AskUserEvent
-  | AgentNotificationEvent;
+  | AgentNotificationEvent
+  | RawArtifactUploadedEvent;
 
 /** A raw token delta streamed from the Anthropic SDK during planning narration. */
 export interface TokenEvent {
@@ -81,6 +83,17 @@ export interface AskUserEvent {
   options?: string[];
 }
 
+/**
+ * Emitted after planning is complete, before execution begins.
+ * Execution suspends until AgentController.approvePlan() is called with the token.
+ * The renderer should show the assembled plan and Approve / Cancel buttons.
+ */
+export interface PlanAwaitingApprovalEvent {
+  type: 'plan:awaiting_approval';
+  token: string;
+  steps: import('./plan.types.js').PlanStep[];
+}
+
 /** Non-step narration from Claude — informational text between steps. */
 export interface AgentNotificationEvent {
   type: 'agent:notification';
@@ -92,4 +105,16 @@ export interface StepStatusUpdateEvent {
   type: 'step:status_update';
   step_id: string;
   status: StepStatus;
+}
+
+/**
+ * Emitted after a Branch B general skill successfully stores its file payload
+ * as an artifact in workspace-manager-service.
+ */
+export interface RawArtifactUploadedEvent {
+  type: 'agent:raw_artifact_uploaded';
+  artifact_id: string;
+  filename: string;
+  mime_type: string;
+  kind: string;
 }

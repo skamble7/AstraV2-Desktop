@@ -38,6 +38,11 @@ const ProvideInputSchema = z.object({
   value: z.unknown(),
 });
 
+const ApprovePlanSchema = z.object({
+  token: z.string().min(1),
+  approved: z.boolean(),
+});
+
 // ─── Handler Registration ─────────────────────────────────────────────────────
 
 export function registerAgentIpcHandlers(
@@ -87,6 +92,12 @@ export function registerAgentIpcHandlers(
       void workspaceId; // placeholder
     }
     agentRegistry.provideInputToActive(payload.token, payload.value);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.AGENT_APPROVE_PLAN, async (_event, rawPayload: unknown) => {
+    const payload = ApprovePlanSchema.parse(rawPayload);
+    agentRegistry.approvePlan(payload.token, payload.approved);
     return { ok: true };
   });
 }

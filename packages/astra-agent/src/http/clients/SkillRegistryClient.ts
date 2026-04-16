@@ -25,7 +25,7 @@ export class SkillRegistryClient extends ServiceClient {
    * GET /skill/{name}
    */
   async getSkill(skillName: string, signal?: AbortSignal): Promise<SkillDocument> {
-    return this.get<SkillDocument>(`/skill/${encodeURIComponent(skillName)}`, signal);
+    return this.get<SkillDocument>(`/skills/${encodeURIComponent(skillName)}`, signal);
   }
 
   /**

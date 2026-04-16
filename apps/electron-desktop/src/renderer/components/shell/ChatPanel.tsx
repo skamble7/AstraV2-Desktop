@@ -15,6 +15,7 @@ import { useAppStore } from '../../store/index.js';
 import { ChatMessage } from './ChatMessage.js';
 import { ChatInput } from './ChatInput.js';
 import { InlineUserInputPrompt } from './InlineUserInputPrompt.js';
+import { PlanApprovalPrompt } from './PlanApprovalPrompt.js';
 import { SkillPackDock } from './SkillPackDock.js';
 
 interface ChatPanelProps {
@@ -158,6 +159,11 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
         ))}
 
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Plan approval prompt — shown after planning, before execution */}
+      <div style={{ padding: '0 12px' }}>
+        <PlanApprovalPrompt />
       </div>
 
       {/* ask_user inline prompt */}

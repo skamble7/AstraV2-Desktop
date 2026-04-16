@@ -32,6 +32,7 @@ export class ArtifactPersister {
 
     const requests = artifacts.map((artifact) => ({
       kind: artifact.kind,
+      ...(artifact.name !== undefined ? { name: artifact.name } : {}),
       data: artifact.data,
       ...(artifact.diagram !== undefined ? { diagram: artifact.diagram } : {}),
       ...(artifact.narrative !== undefined ? { narrative: artifact.narrative } : {}),
@@ -39,6 +40,10 @@ export class ArtifactPersister {
       run_id: runId,
     }));
 
-    return this.workspaceManagerClient.batchUpsertArtifacts(workspaceId, requests, signal);
+    console.log(`[ArtifactPersister] upsert-batch: ${requests.map((r) => `${r.kind} (name: ${r.name ?? 'none'})`).join(', ')}`);
+
+    const result = await this.workspaceManagerClient.batchUpsertArtifacts(workspaceId, requests, signal);
+    console.log(`[ArtifactPersister] upsert-batch OK: ${result.length} artifact(s) saved`);
+    return result;
   }
 }

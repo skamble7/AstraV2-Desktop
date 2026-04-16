@@ -20,6 +20,7 @@ export function useAgentStream(): void {
   const addPlanStep = useAppStore((state) => state.addPlanStep);
   const updatePlanStepStatus = useAppStore((state) => state.updatePlanStepStatus);
   const setAskUserRequest = useAppStore((state) => state.setAskUserRequest);
+  const setPlanApprovalRequest = useAppStore((state) => state.setPlanApprovalRequest);
   const clearPlan = useAppStore((state) => state.clearPlan);
 
   useEffect(() => {
@@ -53,6 +54,10 @@ export function useAgentStream(): void {
       });
     });
 
+    const unsubscribePlanApproval = api.onPlanApprovalRequest((payload) => {
+      setPlanApprovalRequest({ token: payload.token, steps: payload.steps });
+    });
+
     const unsubscribeRunComplete = api.onRunComplete(() => {
       const sessionId = useAppStore.getState().activeConversationId;
       if (sessionId) {
@@ -60,6 +65,11 @@ export function useAgentStream(): void {
       }
       setAgentStreaming(false);
       clearPlan();
+      // Refresh artifact list now that the run has persisted artifacts
+      const workspaceId = useAppStore.getState().currentWorkspaceId;
+      if (workspaceId) {
+        void useAppStore.getState().fetchArtifacts(workspaceId);
+      }
     });
 
     const unsubscribeError = api.onError(({ message }) => {
@@ -69,12 +79,18 @@ export function useAgentStream(): void {
         finalizeAssistantMessage(sessionId);
       }
       setAgentStreaming(false);
+      // Refresh artifacts even on error — some steps may have succeeded
+      const workspaceId = useAppStore.getState().currentWorkspaceId;
+      if (workspaceId) {
+        void useAppStore.getState().fetchArtifacts(workspaceId);
+      }
     });
 
     return () => {
       unsubscribeToken();
       unsubscribePlanUpdate();
       unsubscribeAskUser();
+      unsubscribePlanApproval();
       unsubscribeRunComplete();
       unsubscribeError();
     };

@@ -28,6 +28,7 @@ import { DiscoverPhase } from '../execution/phases/DiscoverPhase.js';
 import { DiagramPhase } from '../execution/phases/DiagramPhase.js';
 import { NarrativePhase } from '../execution/phases/NarrativePhase.js';
 import { ArtifactPersister } from '../persistence/ArtifactPersister.js';
+import { RawArtifactUploader } from '../persistence/RawArtifactUploader.js';
 import { RunRecorder } from '../persistence/RunRecorder.js';
 import { ExecutionCore } from '../execution/ExecutionCore.js';
 import { IntentStrategy } from '../strategies/IntentStrategy.js';
@@ -35,6 +36,7 @@ import { PackStrategy } from '../strategies/PackStrategy.js';
 import { SkillRegistryClient } from '../http/clients/SkillRegistryClient.js';
 import { WorkspaceManagerClient } from '../http/clients/WorkspaceManagerClient.js';
 import { ConfigForgeClient } from '../http/clients/ConfigForgeClient.js';
+import { ArtifactRegistryClient } from '../http/clients/ArtifactRegistryClient.js';
 import { LlmClientFactory } from '../http/clients/LlmClientFactory.js';
 import { SessionClient } from '../http/clients/SessionClient.js';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -49,7 +51,9 @@ export class AgentController {
   private readonly sessionClient: SessionClient;
   private readonly skillRegistryClient: SkillRegistryClient;
   private readonly artifactPersister: ArtifactPersister;
+  private readonly rawArtifactUploader: RawArtifactUploader;
   private readonly configForgeClient: ConfigForgeClient;
+  private readonly artifactRegistryClient: ArtifactRegistryClient;
   private readonly llmClientFactory: LlmClientFactory;
   private readonly skillManifestCache: SkillManifestCache;
   private readonly skillResolver: SkillResolver;
@@ -60,6 +64,11 @@ export class AgentController {
    * ask_user suspension: token → resolver. Populated by IntentStrategy, resolved here.
    */
   private readonly userInputResolvers: Map<string, UserInputResolver> = new Map();
+
+  /**
+   * Plan approval suspension: token → resolver. Populated by startIntentRun, resolved here.
+   */
+  private readonly planApprovalResolvers: Map<string, (approved: boolean) => void> = new Map();
 
   /**
    * Per-run AbortController. Reset on each new run start.
@@ -81,14 +90,16 @@ export class AgentController {
       baseUrl: config.workspaceManagerBaseUrl,
     });
     this.artifactPersister = new ArtifactPersister(workspaceManagerClient);
+    this.rawArtifactUploader = new RawArtifactUploader(workspaceManagerClient, this.streamer);
 
     this.configForgeClient = new ConfigForgeClient({ baseUrl: config.configForgeBaseUrl });
+    this.artifactRegistryClient = new ArtifactRegistryClient({ baseUrl: config.artifactServiceBaseUrl });
 
     // LlmClientFactory resolves credentials from config-forge at run time — no API key needed at construction.
     this.llmClientFactory = new LlmClientFactory(this.configForgeClient, config.plannerConfigRef);
 
     this.skillManifestCache = new SkillManifestCache(this.skillRegistryClient);
-    this.skillResolver = new SkillResolver(this.skillManifestCache);
+    this.skillResolver = new SkillResolver(this.skillManifestCache, this.skillRegistryClient);
     this.skillToToolConverter = new SkillToToolConverter();
     this.toolRegistry = new ToolRegistry(this.skillToToolConverter);
   }
@@ -160,11 +171,11 @@ export class AgentController {
       };
 
       mcpSessionPool = new McpSessionPool();
-      const mcpInvoker = new McpInvoker(mcpSessionPool, anthropic, sessionId, plannerModel);
-      const llmInvoker = new LlmInvoker(anthropic, this.configForgeClient);
+      const mcpInvoker = new McpInvoker(mcpSessionPool, anthropic, sessionId, this.workspaceId, plannerModel, intent);
+      const llmInvoker = new LlmInvoker(anthropic, this.configForgeClient, plannerModel, this.artifactRegistryClient);
 
       const discoverPhase = new DiscoverPhase(mcpInvoker, llmInvoker);
-      const diagramPhase = new DiagramPhase(mcpInvoker, this.streamer);
+      const diagramPhase = new DiagramPhase(mcpInvoker);
       const narrativePhase = new NarrativePhase(anthropic, this.streamer, plannerModel);
       const runRecorder = new RunRecorder();
 
@@ -175,8 +186,11 @@ export class AgentController {
           diagramPhase,
           narrativePhase,
           artifactPersister: this.artifactPersister,
+          rawArtifactUploader: this.rawArtifactUploader,
           runRecorder,
           streamer: this.streamer,
+          anthropic,
+          plannerModel,
         },
         runRecorder,
         streamer: this.streamer,
@@ -203,6 +217,12 @@ export class AgentController {
         // Publish run:completed so the renderer finalizes the streaming message.
         this.streamer.publish({ type: 'run:completed', run_id: runContext.run_id });
       } else {
+        // Suspend until the user approves the plan.
+        const approved = await this.awaitPlanApproval(plan.steps, signal);
+        if (!approved) {
+          this.streamer.publish({ type: 'run:cancelled' });
+          return;
+        }
         await executionCore.execute(plan, this.workspaceId, signal);
       }
     } catch (error) {
@@ -246,11 +266,11 @@ export class AgentController {
     };
 
     const mcpSessionPool = new McpSessionPool();
-    const mcpInvoker = new McpInvoker(mcpSessionPool, anthropic, sessionId, plannerModel);
-    const llmInvoker = new LlmInvoker(anthropic, this.configForgeClient);
+    const mcpInvoker = new McpInvoker(mcpSessionPool, anthropic, sessionId, this.workspaceId, plannerModel);
+    const llmInvoker = new LlmInvoker(anthropic, this.configForgeClient, plannerModel, this.artifactRegistryClient);
 
     const discoverPhase = new DiscoverPhase(mcpInvoker, llmInvoker);
-    const diagramPhase = new DiagramPhase(mcpInvoker, this.streamer);
+    const diagramPhase = new DiagramPhase(mcpInvoker);
     const narrativePhase = new NarrativePhase(anthropic, this.streamer, plannerModel);
     const runRecorder = new RunRecorder();
 
@@ -261,8 +281,11 @@ export class AgentController {
         diagramPhase,
         narrativePhase,
         artifactPersister: this.artifactPersister,
+        rawArtifactUploader: this.rawArtifactUploader,
         runRecorder,
         streamer: this.streamer,
+        anthropic,
+        plannerModel,
       },
       runRecorder,
       streamer: this.streamer,
@@ -300,6 +323,44 @@ export class AgentController {
     if (resolver) {
       this.userInputResolvers.delete(token);
       resolver(value);
+    }
+  }
+
+  /**
+   * Suspends execution until the user approves or rejects the plan.
+   * Emits plan:awaiting_approval so the renderer can show the approval UI.
+   * Returns true if approved, false if rejected or aborted.
+   */
+  private awaitPlanApproval(
+    steps: import('../types/plan.types.js').PlanStep[],
+    signal: AbortSignal
+  ): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const token = randomUUID();
+      this.planApprovalResolvers.set(token, resolve);
+
+      this.streamer.publish({ type: 'plan:awaiting_approval', token, steps });
+
+      signal.addEventListener(
+        'abort',
+        () => {
+          this.planApprovalResolvers.delete(token);
+          resolve(false);
+        },
+        { once: true }
+      );
+    });
+  }
+
+  /**
+   * Resolves a pending plan approval suspension.
+   * Called when the renderer clicks Approve or Cancel via IPC.
+   */
+  approvePlan(token: string, approved: boolean): void {
+    const resolver = this.planApprovalResolvers.get(token);
+    if (resolver) {
+      this.planApprovalResolvers.delete(token);
+      resolver(approved);
     }
   }
 

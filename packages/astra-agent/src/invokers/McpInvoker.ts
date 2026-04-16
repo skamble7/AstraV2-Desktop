@@ -23,13 +23,18 @@ export class McpInvoker implements IInvoker {
   private readonly sessionPool: McpSessionPool;
   private readonly anthropic: AnthropicClient;
   private readonly sessionId: string;
+  private readonly workspaceId: string;
   private readonly repairModel: string;
+  /** The user's original intent message — used as context when repairing missing args. */
+  private readonly intent: string;
 
-  constructor(sessionPool: McpSessionPool, anthropic: AnthropicClient, sessionId: string, repairModel: string) {
+  constructor(sessionPool: McpSessionPool, anthropic: AnthropicClient, sessionId: string, workspaceId: string, repairModel: string, intent: string = '') {
     this.sessionPool = sessionPool;
     this.anthropic = anthropic;
     this.sessionId = sessionId;
+    this.workspaceId = workspaceId;
     this.repairModel = repairModel;
+    this.intent = intent;
   }
 
   async invoke(
@@ -44,11 +49,16 @@ export class McpInvoker implements IInvoker {
     const execution = skill.execution as McpExecution;
     const client = await this.sessionPool.getOrCreate(this.sessionId, skill.name, execution);
 
+    // Strip internal context keys injected by ExecutionCore — not MCP tool params
+    const mcpArgs = Object.fromEntries(
+      Object.entries(args).filter(([k]) => !k.startsWith('_'))
+    );
+
     // Discover and cache the tool schema
     const toolSchema = await this.discoverToolSchema(client, skill, signal);
 
     // Validate args and attempt LLM repair if needed
-    const validatedArgs = await this.validateAndRepairArgs(skill, args, toolSchema, signal);
+    const validatedArgs = await this.validateAndRepairArgs(skill, mcpArgs, toolSchema, signal);
 
     // Invoke with retry
     const result = await this.invokeWithRetry(
@@ -95,35 +105,58 @@ export class McpInvoker implements IInvoker {
   private async validateAndRepairArgs(
     skill: SkillDocument,
     args: Record<string, unknown>,
-    _schema: Record<string, unknown>,
+    schema: Record<string, unknown>,
     signal: AbortSignal
   ): Promise<Record<string, unknown>> {
-    // Basic validation: attempt invocation; if MCP returns validation error, try LLM repair once
-    // Full JSON Schema validation would require ajv — using a lightweight approach here.
-    // If schema has required fields, check they are present.
-    const requiredFields = (_schema['required'] as string[] | undefined) ?? [];
-    const missingFields = requiredFields.filter((field) => !(field in args));
+    const requiredFields = (schema['required'] as string[] | undefined) ?? [];
 
-    if (missingFields.length === 0) {
-      return args;
+    // Inject known values for well-known fields before checking for missing ones.
+    // This prevents the repair LLM from guessing workspace_id from the intent text.
+    const enriched = { ...args };
+    if (requiredFields.includes('workspace_id') && !enriched['workspace_id']) {
+      enriched['workspace_id'] = this.workspaceId;
     }
 
-    // Attempt LLM repair
-    return this.repairArgsWithLlm(skill, args, missingFields, signal);
+    const missingFields = requiredFields.filter((field) => !(field in enriched));
+
+    if (missingFields.length === 0) {
+      return enriched;
+    }
+
+    // Attempt LLM repair, passing the schema so it knows exact field names
+    return this.repairArgsWithLlm(skill, enriched, missingFields, schema, signal);
   }
 
   private async repairArgsWithLlm(
     skill: SkillDocument,
     args: Record<string, unknown>,
     missingFields: string[],
+    schema: Record<string, unknown>,
     signal: AbortSignal
   ): Promise<Record<string, unknown>> {
+    // Extract field descriptions from the schema to help the LLM understand what each field expects
+    const properties = (schema['properties'] as Record<string, Record<string, unknown>> | undefined) ?? {};
+    const fieldDescriptions = Object.entries(properties)
+      .map(([name, def]) => `  - ${name}: ${(def['description'] as string | undefined) ?? (def['type'] as string | undefined) ?? 'unknown'}`)
+      .join('\n');
+
     const prompt = [
-      `The following arguments were provided for skill "${skill.name}" but are missing required fields: ${missingFields.join(', ')}.`,
-      `Existing args: ${JSON.stringify(args)}`,
-      `Please return a JSON object with the complete args including the missing fields filled with reasonable defaults.`,
-      `Reply ONLY with valid JSON — no explanation.`,
-    ].join('\n');
+      `You are mapping arguments to the exact parameter names expected by the MCP tool for skill "${skill.name}".`,
+      ``,
+      `The tool's accepted parameters:`,
+      fieldDescriptions || '  (no schema available)',
+      ``,
+      `Required fields that are missing from the current args: ${missingFields.join(', ')}.`,
+      `Current args (may use wrong key names): ${JSON.stringify(args)}`,
+      `Workspace ID (use this for any workspace_id field): ${this.workspaceId}`,
+      this.intent ? `User's original message: "${this.intent}"` : '',
+      ``,
+      `Instructions:`,
+      `- Extract values from the user's message and current args using the EXACT field names listed above`,
+      `- If a current arg has a value that matches a required field semantically (e.g. "url" contains a URL and "stories_url" is required), use it under the correct field name`,
+      `- Return ONLY the fields defined in the tool schema — do not include extra keys`,
+      `- Reply ONLY with valid JSON — no explanation, no markdown fences`,
+    ].filter(Boolean).join('\n');
 
     const message = await this.anthropic.messages.create(
       {
@@ -136,13 +169,17 @@ export class McpInvoker implements IInvoker {
 
     const content = message.content[0];
     if (content.type !== 'text') {
-      return args; // fallback to original — MCP will fail with descriptive error
+      return args;
     }
 
     try {
-      return JSON.parse(content.text) as Record<string, unknown>;
+      const raw = content.text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+      const repaired = JSON.parse(raw) as Record<string, unknown>;
+      console.log(`[McpInvoker] arg repair for "${skill.name}": ${JSON.stringify(repaired)}`);
+      return repaired;
     } catch {
-      return args; // fallback
+      console.warn(`[McpInvoker] arg repair parse failed for "${skill.name}", falling back to original args`);
+      return args;
     }
   }
 
@@ -181,15 +218,56 @@ export class McpInvoker implements IInvoker {
   }
 
   private parseResult(result: unknown, skill: SkillDocument): StagedArtifact[] {
-    // MCP tool results are typically { content: [{ type: 'text', text: '...' }] }
-    // The actual structure depends on the MCP server implementation.
-    // We treat the whole result as data for the first produces_kind.
+    // MCP tool results are { content: [...], isError?: boolean }
+    // Treat isError: true as a fatal failure — extract the error text and throw.
+    if (result !== null && typeof result === 'object') {
+      const r = result as Record<string, unknown>;
+      if (r['isError'] === true) {
+        const content = r['content'];
+        let errorText = `MCP tool "${skill.execution && 'tool_name' in skill.execution ? skill.execution.tool_name : skill.name}" returned an error.`;
+        if (Array.isArray(content)) {
+          const textBlock = content.find(
+            (c): c is { type: string; text: string } =>
+              c !== null && typeof c === 'object' && (c as Record<string, unknown>)['type'] === 'text'
+          );
+          if (textBlock) errorText = textBlock.text;
+        }
+        throw new Error(errorText);
+      }
+    }
+
     const primaryKind = skill.produces_kinds?.[0] ?? 'cam.unknown';
+
+    // Unwrap MCP content envelope: { content: [{ type: 'text', text: '...' }] }
+    // The actual artifact data is the JSON-parsed text of the first content block.
+    let artifactData: unknown = result;
+    if (result !== null && typeof result === 'object') {
+      const r = result as Record<string, unknown>;
+      const content = r['content'];
+      if (Array.isArray(content) && content.length > 0) {
+        const first = content[0] as Record<string, unknown>;
+        if (first['type'] === 'text' && typeof first['text'] === 'string') {
+          try {
+            artifactData = JSON.parse(first['text']);
+          } catch {
+            artifactData = first['text']; // keep as string if not JSON
+          }
+        }
+      }
+    }
+
+    // Derive a human-readable name from the kind: cam.asset.raina_input → "Raina Input"
+    const kindParts = primaryKind.split('.');
+    const name = kindParts.length >= 3
+      ? kindParts.slice(2).join(' ').replace(/_/g, ' ')
+          .split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+      : primaryKind;
 
     return [
       {
         kind: primaryKind,
-        data: result,
+        name,
+        data: artifactData,
         skill_name: skill.name,
         step_index: 0, // Will be overwritten by StepRunner with the actual step index
       },

@@ -9,10 +9,16 @@ export interface AskUserRequest {
   options?: string[];
 }
 
+export interface PlanApprovalRequest {
+  token: string;
+  steps: PlanStep[];
+}
+
 export interface AgentSlice {
   isAgentStreaming: boolean;
   currentPlanSteps: PlanStep[];
   askUserRequest: AskUserRequest | null;
+  planApprovalRequest: PlanApprovalRequest | null;
   activeStreamingSessionId: string | null;
 
   setAgentStreaming: (streaming: boolean, sessionId?: string) => void;
@@ -21,12 +27,15 @@ export interface AgentSlice {
   clearPlan: () => void;
   setAskUserRequest: (request: AskUserRequest | null) => void;
   submitUserInput: (token: string, value: unknown) => Promise<void>;
+  setPlanApprovalRequest: (request: PlanApprovalRequest | null) => void;
+  submitPlanApproval: (token: string, approved: boolean) => Promise<void>;
 }
 
 export const createAgentSlice: StateCreator<AgentSlice> = (set) => ({
   isAgentStreaming: false,
   currentPlanSteps: [],
   askUserRequest: null,
+  planApprovalRequest: null,
   activeStreamingSessionId: null,
 
   setAgentStreaming: (streaming, sessionId) =>
@@ -55,5 +64,13 @@ export const createAgentSlice: StateCreator<AgentSlice> = (set) => ({
     const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
     await api.provideInput(token, value);
     set({ askUserRequest: null });
+  },
+
+  setPlanApprovalRequest: (request) => set({ planApprovalRequest: request }),
+
+  submitPlanApproval: async (token, approved) => {
+    const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
+    await api.approvePlan(token, approved);
+    set({ planApprovalRequest: null });
   },
 });

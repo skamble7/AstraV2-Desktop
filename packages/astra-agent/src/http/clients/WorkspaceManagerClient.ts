@@ -45,8 +45,8 @@ export class WorkspaceManagerClient extends ServiceClient {
     signal?: AbortSignal
   ): Promise<ArtifactResponse[]> {
     return this.post<ArtifactResponse[]>(
-      `/artifact/${encodeURIComponent(workspaceId)}/batch`,
-      { artifacts: requests },
+      `/artifact/${encodeURIComponent(workspaceId)}/upsert-batch`,
+      { items: requests },
       signal
     );
   }

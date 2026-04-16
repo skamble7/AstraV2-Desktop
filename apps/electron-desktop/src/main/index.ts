@@ -29,6 +29,7 @@ const SERVICE_CONFIG = {
   sessionServiceBaseUrl: process.env['SESSION_SVC_URL'] ?? 'http://127.0.0.1:9029',
   workspaceManagerBaseUrl: process.env['WORKSPACE_MANAGER_URL'] ?? 'http://127.0.0.1:9027',
   configForgeBaseUrl: process.env['CONFIG_FORGE_URL'] ?? 'http://127.0.0.1:8040',
+  artifactServiceBaseUrl: process.env['ARTIFACT_SERVICE_URL'] ?? 'http://127.0.0.1:9020',
   notificationServiceWsUrl: process.env['NOTIFICATION_WS_URL'] ?? 'ws://127.0.0.1:8016/ws',
   /**
    * Config-forge ref key for the LLM config (credentials + model + provider).

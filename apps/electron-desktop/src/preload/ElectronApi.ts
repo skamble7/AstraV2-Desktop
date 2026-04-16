@@ -12,6 +12,7 @@ import type {
   AgentTokenPayload,
   AgentPlanUpdatePayload,
   AgentAskUserPayload,
+  AgentPlanApprovalRequestPayload,
   AgentRunCompletePayload,
   AgentErrorPayload,
   Unsubscribe,
@@ -85,6 +86,9 @@ export interface ElectronAPI {
   /** Provide user input to resume a suspended ask_user prompt. */
   provideInput(token: string, value: unknown): Promise<void>;
 
+  /** Approve or reject the assembled plan before execution begins. */
+  approvePlan(token: string, approved: boolean): Promise<void>;
+
   // ─── Agent Event Subscriptions (main → renderer) ──────────────────────────
 
   /** Streaming token from Claude — append to current message bubble. */
@@ -95,6 +99,9 @@ export interface ElectronAPI {
 
   /** ask_user tool invoked — show inline input prompt in chat. */
   onAskUser(callback: (payload: AgentAskUserPayload) => void): Unsubscribe;
+
+  /** Plan is assembled and awaiting user approval before execution. */
+  onPlanApprovalRequest(callback: (payload: AgentPlanApprovalRequestPayload) => void): Unsubscribe;
 
   /** Run completed (successfully or cancelled). */
   onRunComplete(callback: (payload: AgentRunCompletePayload) => void): Unsubscribe;

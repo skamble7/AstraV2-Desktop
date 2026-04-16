@@ -23,6 +23,7 @@ function makeConfig(): AgentServiceConfig {
     sessionServiceBaseUrl: 'http://localhost:9029',
     workspaceManagerBaseUrl: 'http://localhost:9027',
     configForgeBaseUrl: 'http://localhost:8040',
+    artifactServiceBaseUrl: 'http://localhost:9020',
     notificationServiceWsUrl: 'ws://localhost:8016/ws',
   };
 }

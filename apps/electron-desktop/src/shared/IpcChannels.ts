@@ -19,11 +19,13 @@ export const IPC_CHANNELS = {
   AGENT_RUN_PACK: 'agent:run-pack',
   AGENT_CANCEL: 'agent:cancel',
   AGENT_PROVIDE_INPUT: 'agent:provide-input',
+  AGENT_APPROVE_PLAN: 'agent:approve-plan',
 
   // main → renderer (send)
   AGENT_TOKEN: 'agent:token',
   AGENT_PLAN_UPDATE: 'agent:plan-update',
   AGENT_ASK_USER: 'agent:ask-user',
+  AGENT_PLAN_APPROVAL_REQUEST: 'agent:plan-approval-request',
   AGENT_RUN_COMPLETE: 'agent:run-complete',
   AGENT_ERROR: 'agent:error',
 
@@ -101,6 +103,16 @@ export interface AgentAskUserPayload {
   question: string;
   input_type: 'text' | 'url' | 'file_path' | 'select';
   options?: string[];
+}
+
+export interface AgentPlanApprovalRequestPayload {
+  token: string;
+  steps: import('astra-agent').PlanStep[];
+}
+
+export interface AgentApprovePlanPayload {
+  token: string;
+  approved: boolean;
 }
 
 export interface AgentRunCompletePayload {

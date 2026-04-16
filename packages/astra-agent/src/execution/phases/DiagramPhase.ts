@@ -7,15 +7,12 @@
 
 import type { IInvoker } from '../../invokers/IInvoker.js';
 import type { SkillDocument, StagedArtifact } from '../../types/skill.types.js';
-import type { Streamer } from '../../streaming/Streamer.js';
 
 export class DiagramPhase {
   private readonly mcpInvoker: IInvoker;
-  private readonly streamer: Streamer;
 
-  constructor(mcpInvoker: IInvoker, streamer: Streamer) {
+  constructor(mcpInvoker: IInvoker) {
     this.mcpInvoker = mcpInvoker;
-    this.streamer = streamer;
   }
 
   async run(
@@ -55,10 +52,8 @@ export class DiagramPhase {
         return { ...artifact, diagram: diagramText };
       }
     } catch (error) {
-      this.streamer.publish({
-        type: 'agent:notification',
-        message: `Diagram generation skipped for ${artifact.kind}: ${error instanceof Error ? error.message : String(error)}`,
-      });
+      // Log to terminal only — diagram failure is non-fatal and spamming the chat is noisy
+      console.warn(`[DiagramPhase] skipped for ${artifact.kind}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     return artifact;

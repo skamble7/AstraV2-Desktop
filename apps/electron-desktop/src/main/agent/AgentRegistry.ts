@@ -49,6 +49,16 @@ export class AgentRegistry {
   }
 
   /**
+   * Resolves a pending plan approval. Tokens are unique UUIDs so at most one
+   * controller will respond.
+   */
+  approvePlan(token: string, approved: boolean): void {
+    for (const controller of this.controllers.values()) {
+      controller.approvePlan(token, approved);
+    }
+  }
+
+  /**
    * Removes a controller when a workspace is closed/deleted.
    */
   remove(workspaceId: string): void {

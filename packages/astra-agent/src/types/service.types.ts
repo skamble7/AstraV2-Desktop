@@ -127,11 +127,28 @@ export interface ArtifactResponse {
 
 export interface UpsertArtifactRequest {
   kind: string;
+  name?: string;
   data: unknown;
   diagram?: string;
   narrative?: string;
   skill_name?: string;
   run_id?: string;
+}
+
+// ─── Artifact Service (:9020) ────────────────────────────────────────────────
+
+export interface ArtifactKindSchemaVersion {
+  version: string;
+  json_schema: Record<string, unknown>;
+  depends_on?: string[];
+  created_at?: string;
+}
+
+export interface ArtifactKindResponse {
+  kind_id: string;
+  display_name?: string;
+  description?: string;
+  schema_versions: ArtifactKindSchemaVersion[];
 }
 
 // ─── Config Forge (:8040) ────────────────────────────────────────────────────

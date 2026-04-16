@@ -41,6 +41,12 @@ export class ExecutionCore {
       .resolve('sk.diagram.mermaid', signal)
       .catch(() => undefined); // Optional — may not be registered
 
+    /**
+     * Run-local artifact store: kind → data produced by previous steps.
+     * Injected as context into LLM-mode skills so each step sees prior results.
+     */
+    const runArtifacts: Record<string, unknown> = {};
+
     try {
       for (const step of plan.steps) {
         if (signal.aborted) {
@@ -50,7 +56,19 @@ export class ExecutionCore {
         const skill = await skillResolver.resolve(step.skill_id, signal);
         const runner = new StepRunner(stepRunnerDeps);
 
-        await runner.run(step, skill, diagramSkill, workspaceId, runId, signal);
+        // For LLM-mode skills, inject accumulated artifacts so the LLM prompt
+        // includes all data produced by prior steps in this run.
+        const enrichedStep =
+          skill.execution?.mode === 'llm' && Object.keys(runArtifacts).length > 0
+            ? { ...step, args: { ...step.args, _artifact_context: runArtifacts } }
+            : step;
+
+        const produced = await runner.run(enrichedStep, skill, diagramSkill, workspaceId, runId, signal);
+
+        // Accumulate produced artifacts by kind for subsequent steps
+        for (const artifact of produced) {
+          runArtifacts[artifact.kind] = artifact.data;
+        }
       }
 
       if (signal.aborted) {
