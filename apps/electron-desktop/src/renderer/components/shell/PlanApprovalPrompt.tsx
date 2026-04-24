@@ -8,8 +8,16 @@
 import React from 'react';
 import { useAppStore } from '../../store/index.js';
 
-export function PlanApprovalPrompt(): React.ReactElement | null {
-  const planApprovalRequest = useAppStore((state) => state.planApprovalRequest);
+interface PlanApprovalPromptProps {
+  conversationId: string | null;
+}
+
+export function PlanApprovalPrompt({ conversationId }: PlanApprovalPromptProps): React.ReactElement | null {
+  const planApprovalRequest = useAppStore((state) =>
+    conversationId
+      ? (state.conversationAgentState[conversationId]?.planApprovalRequest ?? null)
+      : null
+  );
   const submitPlanApproval = useAppStore((state) => state.submitPlanApproval);
 
   if (!planApprovalRequest) return null;

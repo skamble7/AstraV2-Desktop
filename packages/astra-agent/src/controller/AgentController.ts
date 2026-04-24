@@ -8,8 +8,8 @@
  * - Handle ask_user suspension/resumption via a Promise resolver map
  * - Stream all events to the Electron main process via Streamer
  *
- * One AgentController per workspace. AgentRegistry in main process holds
- * Map<workspaceId, AgentController>.
+ * One AgentController per conversation. WorkspaceAgentContext in main process holds
+ * Map<conversationId, AgentController>; shared workspace resources are injected.
  *
  * All dependencies are injected — no global state, fully testable.
  * Credentials are resolved at run time from config-forge — no API keys at construction.
@@ -17,41 +17,42 @@
 
 import { randomUUID } from 'node:crypto';
 import { Streamer } from '../streaming/Streamer.js';
-import { SkillManifestCache } from '../skills/SkillManifestCache.js';
-import { SkillResolver } from '../skills/SkillResolver.js';
-import { SkillToToolConverter } from '../skills/SkillToToolConverter.js';
-import { ToolRegistry } from '../tools/ToolRegistry.js';
 import { McpSessionPool } from '../mcp/McpSessionPool.js';
 import { McpInvoker } from '../invokers/McpInvoker.js';
 import { LlmInvoker } from '../invokers/LlmInvoker.js';
 import { DiscoverPhase } from '../execution/phases/DiscoverPhase.js';
 import { DiagramPhase } from '../execution/phases/DiagramPhase.js';
 import { NarrativePhase } from '../execution/phases/NarrativePhase.js';
-import { ArtifactPersister } from '../persistence/ArtifactPersister.js';
 import { RawArtifactUploader } from '../persistence/RawArtifactUploader.js';
 import { RunRecorder } from '../persistence/RunRecorder.js';
 import { ExecutionCore } from '../execution/ExecutionCore.js';
 import { IntentStrategy } from '../strategies/IntentStrategy.js';
 import { PackStrategy } from '../strategies/PackStrategy.js';
-import { SkillRegistryClient } from '../http/clients/SkillRegistryClient.js';
-import { WorkspaceManagerClient } from '../http/clients/WorkspaceManagerClient.js';
-import { ConfigForgeClient } from '../http/clients/ConfigForgeClient.js';
-import { ArtifactRegistryClient } from '../http/clients/ArtifactRegistryClient.js';
-import { LlmClientFactory } from '../http/clients/LlmClientFactory.js';
-import { SessionClient } from '../http/clients/SessionClient.js';
 import type Anthropic from '@anthropic-ai/sdk';
-import type { AgentServiceConfig, UserInputResolver } from '../types/agent.types.js';
+import type { WorkspaceResources, UserInputResolver } from '../types/agent.types.js';
 import type { AgentEvent } from '../types/stream.types.js';
+import type { SessionClient } from '../http/clients/SessionClient.js';
+import type { SkillRegistryClient } from '../http/clients/SkillRegistryClient.js';
+import type { ArtifactPersister } from '../persistence/ArtifactPersister.js';
+import type { ConfigForgeClient } from '../http/clients/ConfigForgeClient.js';
+import type { ArtifactRegistryClient } from '../http/clients/ArtifactRegistryClient.js';
+import type { LlmClientFactory } from '../http/clients/LlmClientFactory.js';
+import type { SkillManifestCache } from '../skills/SkillManifestCache.js';
+import type { SkillResolver } from '../skills/SkillResolver.js';
+import type { SkillToToolConverter } from '../skills/SkillToToolConverter.js';
+import type { ToolRegistry } from '../tools/ToolRegistry.js';
 
 export class AgentController {
   private readonly workspaceId: string;
 
-  // Shared across runs — these hold session-level state
+  // Per-conversation — each controller has its own event bus and raw artifact uploader.
   private readonly streamer: Streamer;
+  private readonly rawArtifactUploader: RawArtifactUploader;
+
+  // Injected workspace-level shared resources.
   private readonly sessionClient: SessionClient;
   private readonly skillRegistryClient: SkillRegistryClient;
   private readonly artifactPersister: ArtifactPersister;
-  private readonly rawArtifactUploader: RawArtifactUploader;
   private readonly configForgeClient: ConfigForgeClient;
   private readonly artifactRegistryClient: ArtifactRegistryClient;
   private readonly llmClientFactory: LlmClientFactory;
@@ -75,33 +76,24 @@ export class AgentController {
    */
   private abortController: AbortController | null = null;
 
-  constructor(workspaceId: string, config: AgentServiceConfig) {
-    this.workspaceId = workspaceId;
+  constructor(resources: WorkspaceResources) {
+    this.workspaceId = resources.workspaceId;
 
+    // Per-conversation resources created here.
     this.streamer = new Streamer();
+    this.rawArtifactUploader = new RawArtifactUploader(resources.workspaceManagerClient, this.streamer);
 
-    this.sessionClient = new SessionClient({ baseUrl: config.sessionServiceBaseUrl });
-
-    this.skillRegistryClient = new SkillRegistryClient({
-      baseUrl: config.skillRegistryBaseUrl,
-    });
-
-    const workspaceManagerClient = new WorkspaceManagerClient({
-      baseUrl: config.workspaceManagerBaseUrl,
-    });
-    this.artifactPersister = new ArtifactPersister(workspaceManagerClient);
-    this.rawArtifactUploader = new RawArtifactUploader(workspaceManagerClient, this.streamer);
-
-    this.configForgeClient = new ConfigForgeClient({ baseUrl: config.configForgeBaseUrl });
-    this.artifactRegistryClient = new ArtifactRegistryClient({ baseUrl: config.artifactServiceBaseUrl });
-
-    // LlmClientFactory resolves credentials from config-forge at run time — no API key needed at construction.
-    this.llmClientFactory = new LlmClientFactory(this.configForgeClient, config.plannerConfigRef);
-
-    this.skillManifestCache = new SkillManifestCache(this.skillRegistryClient);
-    this.skillResolver = new SkillResolver(this.skillManifestCache, this.skillRegistryClient);
-    this.skillToToolConverter = new SkillToToolConverter();
-    this.toolRegistry = new ToolRegistry(this.skillToToolConverter);
+    // Assign shared workspace-level resources.
+    this.sessionClient = resources.sessionClient;
+    this.skillRegistryClient = resources.skillRegistryClient;
+    this.artifactPersister = resources.artifactPersister;
+    this.configForgeClient = resources.configForgeClient;
+    this.artifactRegistryClient = resources.artifactRegistryClient;
+    this.llmClientFactory = resources.llmClientFactory;
+    this.skillManifestCache = resources.skillManifestCache;
+    this.skillResolver = resources.skillResolver;
+    this.skillToToolConverter = resources.skillToToolConverter;
+    this.toolRegistry = resources.toolRegistry;
   }
 
   /**

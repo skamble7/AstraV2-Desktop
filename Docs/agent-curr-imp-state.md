@@ -1,6 +1,6 @@
 # Astra Agent — Current Implementation State
 
-**Last Updated:** April 2026  
+**Last Updated:** April 2026 (17 Apr)  
 **Branch:** master  
 **Purpose:** Living record of what the Astra Agent has implemented, how it diverges from the original design (`astra-agent-design.md`), and what remains to be built. This document is the control surface for how the agent evolves.
 
@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [Implementation Location](#1-implementation-location)
-2. [Module Structure — Design vs Actual](#2-module-structure--design-vs-actual)
+2. [Module Structure — Actual](#2-module-structure--actual)
 3. [What Is Fully Implemented](#3-what-is-fully-implemented)
 4. [Divergences from the Design](#4-divergences-from-the-design)
 5. [Not Yet Implemented](#5-not-yet-implemented)
@@ -31,36 +31,7 @@ This is a better architectural decision than the design — the agent package is
 
 ---
 
-## 2. Module Structure — Design vs Actual
-
-### Design
-
-```
-electron/src/agent/
-├── index.ts
-├── strategies/
-│   ├── IntentStrategy.ts
-│   └── PackStrategy.ts
-├── core/
-│   ├── ExecutionCore.ts
-│   ├── SkillResolver.ts
-│   ├── McpInvoker.ts
-│   ├── LlmInvoker.ts
-│   ├── EnrichmentPhase.ts
-│   ├── ArtifactPersister.ts
-│   ├── RawArtifactUploader.ts        ← Not implemented
-│   ├── RunRecorder.ts
-│   └── Streamer.ts
-├── session/
-│   └── SessionManager.ts
-├── tools/
-│   ├── registry.ts
-│   ├── invoke_skill_pack.ts
-│   └── ask_user.ts
-└── types.ts
-```
-
-### Actual
+## 2. Module Structure — Actual
 
 ```
 packages/astra-agent/src/
@@ -100,6 +71,7 @@ packages/astra-agent/src/
 │   └── Streamer.ts
 ├── persistence/
 │   ├── ArtifactPersister.ts
+│   ├── RawArtifactUploader.ts        ← Added (stores via JSON artifact endpoint)
 │   └── RunRecorder.ts
 ├── http/
 │   ├── ServiceClient.ts              ← Added (base HTTP client)
@@ -108,6 +80,7 @@ packages/astra-agent/src/
 │       ├── SessionClient.ts
 │       ├── WorkspaceManagerClient.ts
 │       ├── ConfigForgeClient.ts
+│       ├── ArtifactRegistryClient.ts ← Added (kind schema lookup from artifact-service)
 │       ├── LlmClientFactory.ts       ← Added (multi-provider LLM factory)
 │       └── LearningClient.ts         ← Legacy, not called by agent
 └── types/
@@ -120,21 +93,35 @@ packages/astra-agent/src/
 apps/electron-desktop/src/main/agent/
 ├── AgentRegistry.ts
 └── StreamBridge.ts
+
+apps/electron-desktop/src/renderer/components/shell/
+├── PlanApprovalPrompt.tsx            ← Added (plan approval UI)
+└── ChatPanel.tsx                     ← Mounts PlanApprovalPrompt
 ```
 
 ---
 
 ## 3. What Is Fully Implemented
 
-Every component below is production-ready and matches the design intent.
+Every component below is production-ready and matches or improves on the design intent.
 
 ### AgentController
 - One controller per workspace, created lazily by `AgentRegistry`
 - `startIntentRun()` and `startPackRun()` as designed
 - `cancel()` via per-run `AbortController`
 - `provideUserInput(token, value)` — resume `ask_user` suspension
+- `approvePlan(token, approved)` — resume plan approval suspension
 - `invalidateSkillCache()` — triggered by WebSocket events from `notification-service`
 - Full dependency injection; no global state
+
+### Plan Approval (full stack)
+- After planning, execution suspends until user approves
+- `AgentController.awaitPlanApproval()` emits `plan:awaiting_approval` with token + step list
+- `StreamBridge` forwards to renderer via `AGENT_PLAN_APPROVAL_REQUEST` IPC channel
+- `AgentRegistry.approvePlan()` iterates all controllers to resolve the token
+- `PlanApprovalPrompt` component in renderer shows steps; "Run plan" / "Cancel" buttons
+- `AgentController.approvePlan()` resolves the awaiting Promise; cancelled runs emit `run:cancelled`
+- Wired in `useAgentStream` and Zustand `agentSlice`
 
 ### IntentStrategy
 - Loads full published skill manifest from `SkillManifestCache`
@@ -146,6 +133,7 @@ Every component below is production-ready and matches the design intent.
 - Handles `invoke_skill_pack` by switching to `PackStrategy` mid-run
 - Streams tokens to renderer in real time
 - If no tool calls → conversational answer, no plan created
+- Persists updated conversation history to session service after planning turn
 
 ### PackStrategy
 - Fetches `SkillPackDocument` from `SkillRegistryClient`
@@ -156,24 +144,56 @@ Every component below is production-ready and matches the design intent.
 - Creates run ID via `RunRecorder`
 - Pre-resolves `sk.diagram.mermaid` diagram skill once per run
 - Iterates plan steps sequentially; cancels remaining steps if discover phase fails
+- **Run-local artifact context:** accumulates produced artifacts by kind in `runArtifacts: Record<string, unknown>`. For LLM-mode steps, injects `_artifact_context` into step args so each LLM skill can read all prior-step outputs.
 - Emits `run:completed` / `run:failed` / `run:cancelled` at end of run
 
 ### Three-Phase Pipeline (per step)
 1. **DiscoverPhase** (fatal) — invokes skill via `McpInvoker` or `LlmInvoker`, returns `StagedArtifact[]`
-2. **DiagramPhase** (non-fatal) — invokes `sk.diagram.mermaid` for each artifact; failures are logged and skipped
-3. **NarrativePhase** (non-fatal) — calls Claude to generate Markdown narrative per artifact; failures are logged and skipped
+2. **DiagramPhase** (non-fatal) — invokes `sk.diagram.mermaid` for each artifact; failures logged to terminal only (no chat noise)
+3. **NarrativePhase** (non-fatal) — calls Claude to generate Markdown narrative per artifact; failures logged and skipped
 
 ### McpInvoker
 - Resolves `${ENV_VAR}` in `base_url` and `headers` at invocation time
-- Calls `tools/list` once per (session, skill) pair; caches schema for run duration
-- Validates args against discovered schema; one LLM repair attempt if validation fails
+- Strips `_`-prefixed internal keys (e.g. `_artifact_context`) before passing args to MCP server
+- Calls `tools/list` once per (session, skill) pair; caches both the tool schema and the full tool list for run duration
+- Injects actual `workspace_id` UUID before checking for missing required fields — prevents repair LLM from guessing IDs from intent text
+- Validates args against discovered schema; builds repair prompt with full field names, descriptions, and semantic-rename instructions; one LLM repair attempt if validation fails
+- Per-call MCP SDK timeout: passes `execution.timeout_sec * 1000` to `callTool()`, overriding the SDK default 60s
+- **Async job polling (auto-detected):** if response has `job_id` + `status: "queued"|"running"`, finds sibling `.status` tool (`.start` → `.status` suffix swap, verified against cached tool list), polls every 3–10s with exponential backoff until `"done"` or `"error"`. Total timeout: `max(timeout_sec * 1000, 10 minutes)`
+- **Pagination (auto-detected):** if response has `next_cursor`, calls same tool repeatedly with `cursor` + `run_id`, merges all `artifacts` arrays
+- **Multi-artifact envelope:** if final JSON has top-level `artifacts` array, returns one `StagedArtifact` per element (each with its own `kind_id`)
+- Unwraps MCP content envelope: `{ content: [{ type:'text', text:'...' }] }` → JSON-parsed artifact data
+- Derives human-readable `name` from kind identifier (e.g. `cam.asset.raina_input` → `"Raina Input"`)
 - Retry loop with `max_attempts`, `backoff_ms`, `jitter_ms` from skill execution config
 - Respects `AbortSignal` throughout
 
 ### LlmInvoker
-- Calls Claude directly with skill description and args
-- Resolves LLM client via `LlmClientFactory` (ConfigForge ref)
-- Returns single `StagedArtifact`
+- **Kind schema lookup:** Before building the prompt, calls `GET /registry/kinds/{kind_id}` on artifact-service to fetch the JSON schema for the artifact kind being produced. If found, the schema is injected into the prompt so the LLM generates schema-conforming output. Non-fatal — proceeds without schema if artifact-service is unreachable or kind not found.
+- Resolves LLM config from ConfigForge via skill's `llm_config_ref` frontmatter field (also accepts `config_ref` alias). Skips incompatible providers (e.g. OpenAI config ref when Bedrock client is active); falls back to planner model.
+- Uses `messages.stream()` + `finalMessage()` to satisfy Bedrock's streaming requirement for high-`max_tokens` calls (>64k).
+- Filters `_artifact_context` and `_`-prefixed keys from visible args. Renders prior-step artifacts as grounded `## Artifacts produced by prior steps` context blocks.
+- Strips markdown fences from response, JSON-parses; structured JSON stored directly as artifact data. Falls back to `{ text: "..." }` if not valid JSON.
+- Derives artifact `name` from kind identifier.
+
+### SkillResolver
+- Parses `llm_config_ref` from YAML frontmatter (also accepts `config_ref` as alias) — fixes the field-name mismatch where skills use `llm_config_ref` but the original parser only looked for `config_ref`.
+- Parses full MCP execution config from frontmatter (transport, base_url, protocol_path, tool_name, headers, retry block)
+- Parses `produces_kinds` from both inline `[...]` and block-list YAML forms
+
+### ArtifactRegistryClient
+- New HTTP client for artifact-service at `http://127.0.0.1:9020`
+- `GET /registry/kinds/{kind_id}` → returns `ArtifactKindResponse` with `schema_versions[].json_schema`
+- Returns `null` on 404 — callers proceed without schema
+
+### ArtifactPersister
+- Batch-upserts enriched `StagedArtifact[]` to `workspace-manager-service` after all three phases complete
+- Passes `name` field through to upsert requests
+- Logs kind names and count before/after each batch call
+
+### RawArtifactUploader
+- Stores file payloads via existing `POST /artifact/{workspaceId}` JSON endpoint (no S3)
+- `data` field carries `{ filename, mime_type, content: "<base64>" }`
+- Emits `agent:raw_artifact_uploaded` via `Streamer` after successful upsert
 
 ### McpSessionPool
 - One `@modelcontextprotocol/sdk` Client per (sessionId, skillName)
@@ -187,40 +207,30 @@ Every component below is production-ready and matches the design intent.
 - Graceful degradation: agent falls back to pure conversation if registry is unreachable
 
 ### SkillToToolConverter
-- `sk.foo.bar` → tool name `sk__foo__bar` (dots replaced with double-underscores, Anthropic tool name constraint)
+- `sk.foo.bar` → tool name `sk__foo__bar` (dots → double-underscores, Anthropic tool name constraint)
 - Reverse mapping `toSkillName()` used when extracting tool calls from Claude response
-- Tool description includes `produces_kinds`, `depends_on`, `tags` for planning context
-- Input schema from `parameters_schema` (not the MCP tool schema — that is resolved at runtime)
 
 ### ConversationManager (enhanced SessionManager)
-- Context window: first message + last 39 messages (40 total) to keep history manageable
+- Context window: first message + last 39 messages (40 total)
 - Auto-naming: fires a Haiku call after the first turn to name the conversation
-- `saveMessages()` handles incremental appends and windowing transparently
 
 ### ask_user Tool
 - Fully implemented per design
 - Suspension/resumption via `Promise` keyed on UUID token
 - Renderer receives `agent:ask_user` IPC event; responds via `agent:user_input`
-- `AgentController.provideUserInput()` resolves the promise and resumes planning
 
 ### invoke_skill_pack Tool
-- Fully implemented per design
 - When Claude invokes it, `ExecutionCore` switches to `PackStrategy` for that call
 - Intent-driven and pack-driven execution compose naturally within one conversation turn
 
-### ArtifactPersister
-- Batch-upserts enriched `StagedArtifact[]` to `workspace-manager-service` after all three phases complete
-- Uses `/artifact/{workspaceId}/batch` endpoint
-
 ### Streaming (Streamer + StreamBridge)
 - `Streamer`: typed Node.js `EventEmitter`; all events are `AgentEvent` union types
-- `StreamBridge`: maps each `AgentEvent` to the correct Electron IPC channel (`webContents.send`)
-- All event types from the design are handled: tokens, plan updates, step status, run completion, ask_user, notifications
+- `StreamBridge`: maps each `AgentEvent` to the correct Electron IPC channel
+- `useAgentStream` hook: subscribes once in `App.tsx`; refreshes artifact list on `run:completed` and `run:failed`
 
 ### LlmClientFactory
 - Resolves LLM config from ConfigForge at runtime
-- Supports direct Anthropic API (env `ANTHROPIC_API_KEY` fast path) and AWS Bedrock (`AnthropicBedrock`)
-- AWS Bedrock patch: overrides `buildRequest` to handle SDK async wrapper quirk
+- Supports direct Anthropic API and AWS Bedrock (`AnthropicBedrock`)
 - Secret resolution: `"literal:<value>"` and `"${ENV_VAR}"` patterns
 
 ### Multi-Workspace Isolation
@@ -235,72 +245,66 @@ Every component below is production-ready and matches the design intent.
 ### 4.1 Two-Pass Manifest Scoping — NOT IMPLEMENTED
 
 **Design (§13):** `IntentStrategy` was specified to use a two-pass approach:
-- **Pass 1:** Load only `domain: 'astra'` skills filtered to the workspace's product tag (RAINA, Neozeta, SABA)
-- **Pass 2:** If Pass 1 yields no tool calls and user message contains file-production signals ("write", "generate", "create a document"), re-run with `domain: 'general'` skills added
+- **Pass 1:** Load only `domain: 'astra'` skills filtered to the workspace's product tag
+- **Pass 2:** If Pass 1 yields no tool calls and user message contains file-production signals, re-run with `domain: 'general'` skills added
 
-**Actual:** `IntentStrategy` loads the full published skill manifest in a single pass without domain filtering or workspace tag scoping. All published skills are presented to Claude on every intent run.
+**Actual:** `IntentStrategy` loads the full published skill manifest in a single pass without domain filtering or workspace tag scoping.
 
-**Impact:** The tool list presented to Claude is larger than intended. For workspaces with many registered skills, this may add noise to Claude's planning context. The two-pass design was intended to keep the tool list tight and avoid surfacing irrelevant general skills.
-
-**Status:** To be implemented. See §5.
+**Status:** Deferred. See §5.
 
 ---
 
-### 4.2 Skill Domain Model (branch B) — PARTIALLY IMPLEMENTED
+### 4.2 Raw Artifact Storage — JSON Endpoint Instead of S3
 
-**Design (§6, §13):** Three execution branches based on `skill.domain` and `skill.raw_artifact_envelope`:
-- Branch A: `domain: 'astra'` → full three-phase pipeline
-- Branch B: `domain: 'general'` + `raw_artifact_envelope` defined → upload to S3 via `RawArtifactUploader`
-- Branch C: `domain: 'general'` + no `raw_artifact_envelope` → return tool result conversationally
+**Design (ADR-016):** `RawArtifactUploader` uploads to S3 via new `workspace-manager-service` endpoints.
 
-**Actual:** The `SkillDocument` type does define `domain` and `raw_artifact_envelope` fields. However, `RawArtifactUploader` is **not implemented** (the class does not exist in the codebase). `StepRunner` currently routes all skills through the same three-phase ASTRA pipeline regardless of domain. Branch B is effectively absent.
+**Actual:** `workspace-manager-service` has no S3/file upload endpoint. `RawArtifactUploader` stores file payloads as JSON documents via the existing `POST /artifact/{workspaceId}` endpoint, with `data: { filename, mime_type, content: "<base64>" }`. S3 storage is deferred to a future backend sprint.
 
-**Impact:** General/file-producing skills (`domain: 'general'`, `raw_artifact_envelope` set) will not work correctly — they will run through the ASTRA pipeline and attempt MongoDB artifact persistence, which will fail or produce incorrect results.
-
-**Status:** `RawArtifactUploader` and Branch B routing need to be built. See §5.
+**Assessment:** Functionally equivalent for current use. No S3 provisioning required.
 
 ---
 
-### 4.3 RunRecorder — In-Process Only (by implementation choice)
+### 4.3 Branch B/C Routing — PARTIALLY IMPLEMENTED
 
-**Design (§6):** `RunRecorder` was specified to create and update `PlaybookRun` records in `learning-service` — tracking run and step state persistently.
+**Design (§6):** Three execution branches based on `skill.domain` and `raw_artifact_envelope`.
 
-**Actual:** `RunRecorder` is in-process only. `createRun()` generates a local UUID. `markStepStarted()`, `markStepCompleted()`, `markRunCompleted()`, etc. are no-ops. `LearningClient` exists in the codebase but is not wired into the agent.
+**Actual:** `SkillDocument` has `domain` and `raw_artifact_envelope` fields. `RawArtifactUploader` exists. However, `StepRunner` still routes all steps through the full three-phase ASTRA pipeline regardless of domain. Branch B and C routing has not been wired into `StepRunner`.
 
-**Impact:** Run history is not persisted. No external run ledger. This is acceptable for the current phase but means the workspace activity feed and any run-replay features cannot be built on top of run records.
-
-**Status:** Deliberate deferral. `LearningClient` is ready; wiring it into `RunRecorder` is straightforward when needed.
+**Status:** `StepRunner` needs branch routing logic added. See §5.
 
 ---
 
-### 4.4 EnrichmentPhase Split → DiagramPhase + NarrativePhase
+### 4.4 RunRecorder — In-Process Only (deliberate deferral)
 
-**Design (§6):** A single `EnrichmentPhase.ts` was specified to handle both diagram and narrative enrichment.
+**Design (§6):** `RunRecorder` creates and updates `PlaybookRun` records in `learning-service`.
 
-**Actual:** Split into two separate phase classes: `DiagramPhase.ts` and `NarrativePhase.ts`. This is a better implementation — each phase has a single responsibility, simpler error isolation, and is independently testable.
+**Actual:** `RunRecorder` is in-process only. `LearningClient` exists but is not wired.
 
-**Assessment:** Improvement over the design. No action required.
-
----
-
-### 4.5 ConversationManager Additions (Beyond Design)
-
-**Design (§11):** `SessionManager` was specified with basic load/save of `AnthropicMessage[]` history.
-
-**Actual:** Two classes exist:
-- `SessionManager` — matches the design spec
-- `ConversationManager` — adds context windowing (40-message limit: first + last 39) and fire-and-forget Haiku-based auto-naming after the first turn
-
-**Assessment:** `ConversationManager` is an enhancement not in the original design. It is the production-grade session manager. Verify that `AgentController` wires to `ConversationManager`, not the plain `SessionManager`, for production use.
+**Status:** Deliberate deferral. `LearningClient` is ready; wiring is straightforward when needed.
 
 ---
 
-### 4.6 Module Location
+### 4.5 EnrichmentPhase Split → DiagramPhase + NarrativePhase
+
+**Design (§6):** A single `EnrichmentPhase.ts`.
+
+**Actual:** Split into `DiagramPhase.ts` and `NarrativePhase.ts`. Better design — each has single responsibility. `DiagramPhase` logs failures to terminal only (no chat spam). **Assessment:** Improvement over the design.
+
+---
+
+### 4.6 ConversationManager Additions (Beyond Design)
+
+**Design (§11):** Basic `SessionManager` with load/save.
+
+**Actual:** Two classes: `SessionManager` (matches design) and `ConversationManager` (adds 40-message context windowing and auto-naming). **Assessment:** Enhancement. Production code uses `SessionClient` in `AgentController` for history load/save; `ConversationManager` is available for full session management.
+
+---
+
+### 4.7 Module Location
 
 **Design:** `electron/src/agent/`  
-**Actual:** `packages/astra-agent/` (monorepo library) + `apps/electron-desktop/src/main/agent/` (bridge)
-
-**Assessment:** Better than the design. The agent is framework-independent and could be tested in isolation. No action required.
+**Actual:** `packages/astra-agent/` + `apps/electron-desktop/src/main/agent/`  
+**Assessment:** Better than the design. No action required.
 
 ---
 
@@ -308,16 +312,13 @@ Every component below is production-ready and matches the design intent.
 
 | Feature | Design Section | Priority | Notes |
 |---|---|---|---|
-| **RawArtifactUploader** | §14 / ADR-016 | High | Branch B cannot work without it |
-| **Branch B routing in StepRunner** | §6 | High | `domain: 'general'` + `raw_artifact_envelope` path |
+| **Branch B/C routing in StepRunner** | §6 | High | `RawArtifactUploader` exists; routing logic needs to be added to `StepRunner` |
 | **Two-pass manifest scoping** | §13 | Medium | Pass 1 ASTRA-only, Pass 2 widen to general |
 | **Workspace product tag filtering** | §13 | Medium | Filter ASTRA skills by workspace tag (RAINA/Neozeta/SABA) |
 | **RunRecorder → learning-service** | §6 | Low | `LearningClient` ready; wiring deferred |
-| **Raw artifact workspace endpoints** | §14 | High (backend) | `POST/GET/DELETE /raw-artifact/{workspaceId}` on workspace-manager-service |
-| **S3 workspace provisioning** | §14 | High (backend) | `workspace.created` event handler to provision S3 prefix |
-| **ask_user timeout** | §8 | Low | No timeout on suspension — can hang indefinitely |
+| **S3 raw artifact storage** | ADR-016 | Low (backend) | Deferred until `workspace-manager-service` gains file endpoints |
+| **ask_user timeout** | §8 | Low | No timeout on suspension — can hang indefinitely if renderer never responds |
 | **Skill registration onboarding wizard domain question** | §13 | Medium | UI question to set domain/raw_artifact_envelope during skill registration |
-| **Streaming error recovery** | §10 | Low | `anthropic.messages.stream()` errors not explicitly handled in IntentStrategy |
 
 ---
 
@@ -331,9 +332,24 @@ class AgentController {
   onEvent(listener: (event: AgentEvent) => void): () => void
   startIntentRun(intent: string, sessionId: string): Promise<void>
   startPackRun(packKey: string, packVersion: string, inputs: Record<string, unknown>, sessionId: string): Promise<void>
-  cancel(): Promise<void>
-  provideUserInput(token: string, value: unknown): Promise<void>
+  cancel(): void
+  provideUserInput(token: string, value: unknown): void
+  approvePlan(token: string, approved: boolean): void
   invalidateSkillCache(): void
+}
+```
+
+### AgentServiceConfig
+
+```typescript
+interface AgentServiceConfig {
+  skillRegistryBaseUrl: string;       // http://127.0.0.1:9028
+  sessionServiceBaseUrl: string;      // http://127.0.0.1:9029
+  workspaceManagerBaseUrl: string;    // http://127.0.0.1:9027
+  configForgeBaseUrl: string;         // http://127.0.0.1:8040
+  artifactServiceBaseUrl: string;     // http://127.0.0.1:9020
+  notificationServiceWsUrl: string;   // ws://127.0.0.1:8016/ws
+  plannerConfigRef: string;           // e.g. "dev.llm.bedrock.explicit-creds"
 }
 ```
 
@@ -346,13 +362,13 @@ class AgentController {
 | `run:step_started` | `AGENT_PLAN_UPDATE` | `{ stepIndex, skillId, status: 'running' }` |
 | `run:step_completed` | `AGENT_PLAN_UPDATE` | `{ stepIndex, skillId, status: 'completed', artifactCount }` |
 | `run:step_failed` | `AGENT_PLAN_UPDATE` | `{ stepIndex, skillId, status: 'failed', error }` |
-| `run:completed` | `AGENT_RUN_COMPLETE` | `{ runId }` |
-| `run:failed` | `AGENT_ERROR` | `{ error, fatal: true }` |
-| `run:cancelled` | `AGENT_RUN_COMPLETE` | `{ cancelled: true }` |
+| `run:completed` | `AGENT_RUN_COMPLETE` | `{}` |
+| `run:failed` | `AGENT_ERROR` | `{ error }` |
+| `run:cancelled` | `AGENT_RUN_COMPLETE` | `{}` |
+| `plan:awaiting_approval` | `AGENT_PLAN_APPROVAL_REQUEST` | `{ token, steps: PlanStep[] }` |
 | `agent:ask_user` | `AGENT_ASK_USER` | `{ token, question, input_type, options? }` |
+| `agent:raw_artifact_uploaded` | `AGENT_PLAN_UPDATE` | `{ artifact_id, filename, mime_type, kind }` |
 | `agent:notification` | `AGENT_TOKEN` | `{ delta: string }` |
-
-**Not yet emitted:** `agent:raw_artifact_uploaded` — depends on RawArtifactUploader (§5)
 
 ### Service Endpoints Used by the Agent
 
@@ -360,8 +376,9 @@ class AgentController {
 |---|---|---|
 | skill-registry-service | `http://127.0.0.1:9028` | Skill manifest, skill pack fetch |
 | conversation-service (session-svc) | `http://127.0.0.1:9029` | Conversation history load/save |
-| workspace-manager-service | `http://127.0.0.1:8010` | Artifact batch-upsert |
+| workspace-manager-service | `http://127.0.0.1:9027` | Artifact batch-upsert (`/artifact/{id}/batch`) |
 | config-forge | `http://127.0.0.1:8040` | LLM config resolution |
+| artifact-service | `http://127.0.0.1:9020` | Kind schema lookup (`/registry/kinds/{kind_id}`) |
 | notification-service (WebSocket) | `ws://127.0.0.1:8016/ws` | Skill cache invalidation events |
 | learning-service | `http://127.0.0.1:9022` | Run records (client exists, not wired) |
 
@@ -369,17 +386,20 @@ class AgentController {
 
 ## 7. Known Gaps and Risks
 
-### High — Branch B is inoperative
-General file-producing skills (`domain: 'general'`, `raw_artifact_envelope` set) have no working execution path. They will fall through to Branch A (ASTRA pipeline) and likely fail or produce garbage. Any skills registered with `raw_artifact_envelope` should not be used in production until Branch B is implemented.
+### Medium — Branch B/C is not routed in StepRunner
+`RawArtifactUploader` and `RawArtifactEnvelope` are implemented, but `StepRunner` still runs all skills through the full three-phase ASTRA pipeline. General file-producing skills (`domain: 'general'`, `raw_artifact_envelope` set) will fall through to Branch A and attempt MongoDB artifact persistence. This should be fixed before registering general/file skills for production use.
 
 ### Medium — No workspace tag scoping on skill manifest
-All published skills are presented to Claude on every intent run, regardless of which product (RAINA, Neozeta, SABA) the workspace is associated with. For small skill registries this is acceptable. As the registry grows, the tool list will exceed recommended sizes and degrade planning quality. Implement two-pass scoping before onboarding more than ~30 skills.
+All published skills are presented to Claude on every intent run. As the registry grows, the tool list will exceed recommended sizes and degrade planning quality. Implement two-pass scoping before onboarding more than ~30 skills.
 
 ### Low — ask_user has no timeout
-If the renderer never sends `agent:user_input` after a suspension (e.g., user closes the window, crash), the awaiting `Promise` in `ExecutionCore` will never resolve. The `AbortController` on `cancel()` does not currently reach the ask_user resolver. Add a timeout or wire the abort signal to the resolver map.
+If the renderer never sends `agent:user_input` after a suspension (user closes window, crash), the awaiting `Promise` never resolves. Wire the `AbortController` abort signal to the resolver map.
 
 ### Low — RunRecorder is in-process only
-No persistent run history. Fine for conversational use. Blocks run-replay, audit trail, and activity feed features that depend on a run ledger.
+No persistent run history. Blocks run-replay, audit trail, and workspace activity feed features.
 
 ### Informational — LearningClient is dead code
-`packages/astra-agent/src/http/clients/LearningClient.ts` exists but is not wired into `RunRecorder` or called anywhere by the agent. It should either be wired into `RunRecorder` when run persistence is needed, or removed to avoid confusion.
+`packages/astra-agent/src/http/clients/LearningClient.ts` exists but is not called anywhere. Wire into `RunRecorder` when run persistence is needed, or remove.
+
+### Informational — upsert-batch response format
+`ArtifactPersister` logs `"upsert-batch OK: undefined artifact(s) saved"` — `result.length` is undefined, suggesting the batch response may not be a plain array (could be `{ artifacts: [...] }` or similar). The artifacts are being saved (200 OK confirmed) but the count log is incorrect. Investigate the actual response shape from `workspace-manager-service`.

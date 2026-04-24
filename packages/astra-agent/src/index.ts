@@ -9,8 +9,11 @@
 // Primary entry point
 export { AgentController } from './controller/AgentController.js';
 
-// Config type needed to construct AgentController
-export type { AgentServiceConfig } from './types/agent.types.js';
+// Config type needed to construct AgentController / WorkspaceAgentContext
+export type { AgentServiceConfig, WorkspaceResources } from './types/agent.types.js';
+
+// Workspace-level context that owns shared resources + per-conversation controllers
+export { WorkspaceAgentContext } from './WorkspaceAgentContext.js';
 
 // Event types needed by the Electron StreamBridge and renderer IPC layer
 export type { AgentEvent } from './types/stream.types.js';

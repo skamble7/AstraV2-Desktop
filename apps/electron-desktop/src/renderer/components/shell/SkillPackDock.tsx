@@ -9,14 +9,19 @@ import { useAppStore } from '../../store/index.js';
 
 interface SkillPackDockProps {
   onRunPack: (packKey: string, packVersion: string) => void;
+  conversationId: string | null;
 }
 
-export function SkillPackDock({ onRunPack }: SkillPackDockProps): React.ReactElement {
+export function SkillPackDock({ onRunPack, conversationId }: SkillPackDockProps): React.ReactElement {
   const skillPacks = useAppStore((state) => state.skillPacks);
   const selectedPackId = useAppStore((state) => state.selectedPackId);
   const selectPack = useAppStore((state) => state.selectPack);
   const fetchSkillPacks = useAppStore((state) => state.fetchSkillPacks);
-  const isAgentStreaming = useAppStore((state) => state.isAgentStreaming);
+  const isAgentStreaming = useAppStore((state) =>
+    conversationId
+      ? (state.conversationAgentState[conversationId]?.isStreaming ?? false)
+      : false
+  );
 
   useEffect(() => {
     void fetchSkillPacks();

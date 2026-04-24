@@ -14,63 +14,111 @@ export interface PlanApprovalRequest {
   steps: PlanStep[];
 }
 
-export interface AgentSlice {
-  isAgentStreaming: boolean;
-  currentPlanSteps: PlanStep[];
+/**
+ * Per-conversation agent state. Each active conversation gets its own entry in
+ * conversationAgentState keyed by conversationId.
+ */
+export interface ConversationAgentState {
+  isStreaming: boolean;
+  planSteps: PlanStep[];
   askUserRequest: AskUserRequest | null;
   planApprovalRequest: PlanApprovalRequest | null;
-  activeStreamingSessionId: string | null;
+}
 
-  setAgentStreaming: (streaming: boolean, sessionId?: string) => void;
-  addPlanStep: (step: PlanStep) => void;
-  updatePlanStepStatus: (stepId: string, status: PlanStep['status']) => void;
-  clearPlan: () => void;
-  setAskUserRequest: (request: AskUserRequest | null) => void;
+const DEFAULT_CONVERSATION_AGENT_STATE: ConversationAgentState = {
+  isStreaming: false,
+  planSteps: [],
+  askUserRequest: null,
+  planApprovalRequest: null,
+};
+
+export interface AgentSlice {
+  conversationAgentState: Record<string, ConversationAgentState>;
+
+  setConversationStreaming: (conversationId: string, streaming: boolean) => void;
+  addPlanStep: (conversationId: string, step: PlanStep) => void;
+  updatePlanStepStatus: (conversationId: string, stepId: string, status: PlanStep['status']) => void;
+  clearPlan: (conversationId: string) => void;
+  setAskUserRequest: (conversationId: string, request: AskUserRequest | null) => void;
   submitUserInput: (token: string, value: unknown) => Promise<void>;
-  setPlanApprovalRequest: (request: PlanApprovalRequest | null) => void;
+  setPlanApprovalRequest: (conversationId: string, request: PlanApprovalRequest | null) => void;
   submitPlanApproval: (token: string, approved: boolean) => Promise<void>;
+  removeConversationAgentState: (conversationId: string) => void;
+}
+
+function updateConversation(
+  state: Record<string, ConversationAgentState>,
+  conversationId: string,
+  patch: Partial<ConversationAgentState>
+): Record<string, ConversationAgentState> {
+  const existing = state[conversationId] ?? DEFAULT_CONVERSATION_AGENT_STATE;
+  return { ...state, [conversationId]: { ...existing, ...patch } };
 }
 
 export const createAgentSlice: StateCreator<AgentSlice> = (set) => ({
-  isAgentStreaming: false,
-  currentPlanSteps: [],
-  askUserRequest: null,
-  planApprovalRequest: null,
-  activeStreamingSessionId: null,
+  conversationAgentState: {},
 
-  setAgentStreaming: (streaming, sessionId) =>
-    set({
-      isAgentStreaming: streaming,
-      activeStreamingSessionId: streaming ? (sessionId ?? null) : null,
+  setConversationStreaming: (conversationId, streaming) =>
+    set((state) => ({
+      conversationAgentState: updateConversation(state.conversationAgentState, conversationId, {
+        isStreaming: streaming,
+      }),
+    })),
+
+  addPlanStep: (conversationId, step) =>
+    set((state) => {
+      const existing = state.conversationAgentState[conversationId] ?? DEFAULT_CONVERSATION_AGENT_STATE;
+      return {
+        conversationAgentState: updateConversation(state.conversationAgentState, conversationId, {
+          planSteps: [...existing.planSteps, step],
+        }),
+      };
     }),
 
-  addPlanStep: (step) =>
+  updatePlanStepStatus: (conversationId, stepId, status) =>
+    set((state) => {
+      const existing = state.conversationAgentState[conversationId] ?? DEFAULT_CONVERSATION_AGENT_STATE;
+      return {
+        conversationAgentState: updateConversation(state.conversationAgentState, conversationId, {
+          planSteps: existing.planSteps.map((s) => (s.id === stepId ? { ...s, status } : s)),
+        }),
+      };
+    }),
+
+  clearPlan: (conversationId) =>
     set((state) => ({
-      currentPlanSteps: [...state.currentPlanSteps, step],
+      conversationAgentState: updateConversation(state.conversationAgentState, conversationId, {
+        planSteps: [],
+      }),
     })),
 
-  updatePlanStepStatus: (stepId, status) =>
+  setAskUserRequest: (conversationId, request) =>
     set((state) => ({
-      currentPlanSteps: state.currentPlanSteps.map((step) =>
-        step.id === stepId ? { ...step, status } : step
-      ),
+      conversationAgentState: updateConversation(state.conversationAgentState, conversationId, {
+        askUserRequest: request,
+      }),
     })),
-
-  clearPlan: () => set({ currentPlanSteps: [] }),
-
-  setAskUserRequest: (request) => set({ askUserRequest: request }),
 
   submitUserInput: async (token, value) => {
     const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
     await api.provideInput(token, value);
-    set({ askUserRequest: null });
   },
 
-  setPlanApprovalRequest: (request) => set({ planApprovalRequest: request }),
+  setPlanApprovalRequest: (conversationId, request) =>
+    set((state) => ({
+      conversationAgentState: updateConversation(state.conversationAgentState, conversationId, {
+        planApprovalRequest: request,
+      }),
+    })),
 
   submitPlanApproval: async (token, approved) => {
     const api = (window as unknown as { electronAPI: ElectronAPI }).electronAPI;
     await api.approvePlan(token, approved);
-    set({ planApprovalRequest: null });
   },
+
+  removeConversationAgentState: (conversationId) =>
+    set((state) => {
+      const { [conversationId]: _removed, ...rest } = state.conversationAgentState;
+      return { conversationAgentState: rest };
+    }),
 });

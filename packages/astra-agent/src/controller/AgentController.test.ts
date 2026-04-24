@@ -14,17 +14,25 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { AgentController } from './AgentController.js';
-import type { AgentServiceConfig } from '../types/agent.types.js';
+import type { WorkspaceResources } from '../types/agent.types.js';
 
-function makeConfig(): AgentServiceConfig {
+function makeResources(): WorkspaceResources {
+  // Minimal stubs — tests only exercise the controller's observable surface
+  // (event subscriptions, cancel, provideUserInput, invalidateSkillCache).
+  // No HTTP calls are made.
   return {
-    plannerConfigRef: 'dev.llm.bedrock.explicit-creds',
-    skillRegistryBaseUrl: 'http://localhost:9028',
-    sessionServiceBaseUrl: 'http://localhost:9029',
-    workspaceManagerBaseUrl: 'http://localhost:9027',
-    configForgeBaseUrl: 'http://localhost:8040',
-    artifactServiceBaseUrl: 'http://localhost:9020',
-    notificationServiceWsUrl: 'ws://localhost:8016/ws',
+    workspaceId: 'ws-1',
+    sessionClient: {} as WorkspaceResources['sessionClient'],
+    skillRegistryClient: {} as WorkspaceResources['skillRegistryClient'],
+    workspaceManagerClient: {} as WorkspaceResources['workspaceManagerClient'],
+    configForgeClient: {} as WorkspaceResources['configForgeClient'],
+    artifactRegistryClient: {} as WorkspaceResources['artifactRegistryClient'],
+    llmClientFactory: {} as WorkspaceResources['llmClientFactory'],
+    skillManifestCache: { invalidate: vi.fn() } as unknown as WorkspaceResources['skillManifestCache'],
+    skillResolver: {} as WorkspaceResources['skillResolver'],
+    skillToToolConverter: {} as WorkspaceResources['skillToToolConverter'],
+    toolRegistry: {} as WorkspaceResources['toolRegistry'],
+    artifactPersister: {} as WorkspaceResources['artifactPersister'],
   };
 }
 
@@ -33,7 +41,7 @@ describe('AgentController', () => {
     it('returns a working unsubscribe function', () => {
       // Access the internal streamer indirectly: publish via the streamer, confirm
       // listener does NOT fire after unsubscribe.
-      const controller = new AgentController('ws-1', makeConfig());
+      const controller = new AgentController(makeResources());
       const listener = vi.fn();
 
       const unsubscribe = controller.onEvent(listener);
@@ -47,14 +55,14 @@ describe('AgentController', () => {
 
   describe('cancel', () => {
     it('does not throw when no run is in progress', () => {
-      const controller = new AgentController('ws-1', makeConfig());
+      const controller = new AgentController(makeResources());
       expect(() => controller.cancel()).not.toThrow();
     });
   });
 
   describe('provideUserInput', () => {
     it('does not throw for an unknown token', () => {
-      const controller = new AgentController('ws-1', makeConfig());
+      const controller = new AgentController(makeResources());
       expect(() => controller.provideUserInput('unknown-token', 'some value')).not.toThrow();
     });
 
@@ -68,7 +76,7 @@ describe('AgentController', () => {
       // Access the private map indirectly through the public API:
       // The map is populated by IntentStrategy at runtime. We simulate this
       // by casting to access it for testing purposes.
-      const controller = new AgentController('ws-1', makeConfig());
+      const controller = new AgentController(makeResources());
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const resolverMap: Map<string, (value: unknown) => void> = (controller as any).userInputResolvers;
 
@@ -88,7 +96,7 @@ describe('AgentController', () => {
 
   describe('invalidateSkillCache', () => {
     it('does not throw', () => {
-      const controller = new AgentController('ws-1', makeConfig());
+      const controller = new AgentController(makeResources());
       expect(() => controller.invalidateSkillCache()).not.toThrow();
     });
   });

@@ -221,7 +221,12 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
   const artifacts = useAppStore((state) =>
     currentWorkspaceId ? (state.artifactsByWorkspace[currentWorkspaceId] ?? []) : []
   );
-  const planSteps = useAppStore((state) => state.currentPlanSteps);
+  const activeConversationId = useAppStore((state) => state.activeConversationId);
+  const planSteps = useAppStore((state) =>
+    activeConversationId
+      ? (state.conversationAgentState[activeConversationId]?.planSteps ?? [])
+      : []
+  );
   const fetchArtifacts = useAppStore((state) => state.fetchArtifacts);
 
   const [artifactsOpen, setArtifactsOpen] = useState(true);
@@ -296,7 +301,7 @@ export function RightArtifactPanel({ width = 280 }: { width?: number }): React.R
         {progressOpen && (
           <div style={{ padding: '8px 10px' }}>
             {planSteps.length > 0 ? (
-              <PlanProgressBar />
+              <PlanProgressBar planSteps={planSteps} />
             ) : (
               <p style={{ fontSize: np ? '14px' : '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
                 See task progress for longer tasks.

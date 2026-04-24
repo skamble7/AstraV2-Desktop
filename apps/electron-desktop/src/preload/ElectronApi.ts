@@ -80,8 +80,8 @@ export interface ElectronAPI {
   /** Start a pack-driven run. */
   runPack(payload: AgentRunPackPayload): Promise<void>;
 
-  /** Cancel the active run for a workspace. */
-  cancelRun(workspaceId: string): Promise<void>;
+  /** Cancel the active run for a specific conversation. */
+  cancelRun(workspaceId: string, conversationId: string): Promise<void>;
 
   /** Provide user input to resume a suspended ask_user prompt. */
   provideInput(token: string, value: unknown): Promise<void>;

@@ -1,8 +1,8 @@
 # Astra Agent — TypeScript Design
 
-**Branch:** `feature/skill-based-architecture`  
+**Branch:** `master`  
 **Status:** Accepted  
-**Last Updated:** March 2026
+**Last Updated:** April 2026
 
 ---
 
@@ -112,12 +112,24 @@ class AgentController {
 
   async startIntentRun(intent: string, sessionId: string): Promise<void>
   async startPackRun(packKey: string, packVersion: string, inputs: Record<string, unknown>, sessionId: string): Promise<void>
-  async cancel(): Promise<void>
-  async provideUserInput(token: string, value: unknown): Promise<void>
+  cancel(): void
+  provideUserInput(token: string, value: unknown): void
+  approvePlan(token: string, approved: boolean): void
+  invalidateSkillCache(): void
 }
 ```
 
 The main process holds a `Map<workspaceId, AgentController>`. Each workspace gets its own controller and its own `AbortController`. Cancelling one workspace's run has zero effect on any other.
+
+### Plan Approval Suspend/Resume
+
+After `IntentStrategy` produces a plan with at least one step, `AgentController` suspends execution until the user approves the plan in the UI. This follows the same token-resolver pattern as `ask_user`:
+
+1. `awaitPlanApproval(steps, signal)` emits `plan:awaiting_approval` with a UUID token and the assembled plan steps.
+2. The renderer shows `PlanApprovalPrompt` with "Run plan" / "Cancel" buttons.
+3. The user clicks Approve or Cancel; renderer sends `agent:approve-plan` IPC with `{ token, approved }`.
+4. `AgentController.approvePlan()` resolves the waiting Promise.
+5. If approved, execution proceeds to `ExecutionCore`; if rejected, `run:cancelled` is emitted.
 
 ---
 
@@ -259,23 +271,47 @@ if (skill.domain === 'astra') {
 
 ```typescript
 class McpInvoker {
-  async invoke(
-    skill: SkillDocument,
-    args: Record<string, unknown>,
-    signal: AbortSignal
-  ): Promise<unknown>
+  constructor(sessionPool, anthropic, sessionId, workspaceId, repairModel, intent?)
+  async invoke(skill, args, signal): Promise<StagedArtifact[]>
 }
 ```
 
 Key behaviour:
 
 - Resolves `${ENV_VAR}` placeholders in `execution.base_url` and `execution.headers` at invocation time using `process.env`.
-- Calls `tools/list` on the MCP server once per session per skill to discover the live input JSON schema. Caches the result in `RunState.discoveredSchemas[skill.name]` for the duration of the run — no repeated `tools/list` calls.
-- Validates `args` against the discovered schema before invoking. One LLM repair attempt if validation fails.
-- Streams or polls for async tool results.
-- Respects `AbortSignal` — throws `AbortError` if cancelled, causing the step to fail cleanly.
-- Retry config is read from `skill.execution.retry` (`max_attempts`, `backoff_ms`, `jitter_ms`).
-- MCP transport: uses `@modelcontextprotocol/sdk` (TypeScript official SDK), which replaces the Python `MCPConnection` class.
+- Calls `tools/list` on the MCP server once per (session, skill) pair to discover the live input JSON schema and the full tool list. Both are cached in-memory for the run duration.
+- Strips `_`-prefixed internal context keys (e.g. `_artifact_context`) from args before passing to the MCP server.
+- Validates args against the discovered schema. For well-known fields (`workspace_id`), injects the actual value before checking for missing fields — this prevents the repair LLM from guessing IDs from the intent text.
+- One LLM repair attempt if required fields are still missing: the repair prompt includes the full schema with field descriptions and names, instructs the LLM to use exact field names, and to rename semantically matching values (e.g. `url` → `stories_url`).
+- Per-call timeout: passes `execution.timeout_sec * 1000` to the MCP SDK `callTool()` options, overriding the SDK default of 60s.
+
+**Protocol detection (automatic, from response shape — no skill frontmatter required):**
+
+- **Async job polling:** if the unwrapped response has `job_id` and `status: "queued"|"running"`, the invoker automatically finds the sibling `.status` tool (replaces `.start` → `.status` in the tool name, confirmed against the cached `listTools()` result) and polls until `status === "done"` or `"error"`. Poll interval starts at 3s and backs off to 10s. Total polling timeout is `max(timeout_sec * 1000, 10 minutes)` — the 10-minute floor prevents skills with small `timeout_sec` values from timing out prematurely on async jobs.
+- **Pagination:** if the unwrapped response has a `next_cursor` string field, the invoker calls the same tool repeatedly with `cursor: next_cursor` (and `run_id` from the first page for server-side caching) until `next_cursor` is absent. All `artifacts` arrays are merged across pages.
+- **Multi-artifact envelope:** if the final unwrapped JSON has a top-level `artifacts` array (used by COBOL parser and guidance generator), each element becomes its own `StagedArtifact` using the element's `kind_id`. The existing single-artifact path is unchanged for normal skills.
+
+- Retry loop with `max_attempts`, `backoff_ms`, `jitter_ms` from `skill.execution.retry`.
+- Respects `AbortSignal` throughout; throws `AbortError` on cancellation.
+- MCP transport: uses `@modelcontextprotocol/sdk` (TypeScript official SDK).
+
+### LlmInvoker
+
+```typescript
+class LlmInvoker {
+  constructor(anthropic, configForgeClient, plannerModel, artifactRegistryClient)
+  async invoke(skill, args, signal): Promise<StagedArtifact[]>
+}
+```
+
+Key behaviour:
+
+- Before building the prompt, calls `GET /registry/kinds/{kind_id}` on artifact-service to fetch the kind's `json_schema`. If found, the schema is injected into the prompt so the LLM produces output matching the exact expected shape. Failure is non-fatal — proceeds without schema.
+- Resolves the LLM config from ConfigForge via the skill's `llm_config_ref` frontmatter field (also accepts `config_ref` as alias). Falls back to the planner model if the config_ref is absent, empty, or uses an incompatible provider (e.g. OpenAI config ref when client is Bedrock).
+- Uses `messages.stream()` + `finalMessage()` instead of `messages.create()` to satisfy Bedrock's streaming requirement for calls with high `max_tokens` (>64k tokens).
+- Filters `_artifact_context` and other `_`-prefixed keys from visible args. Renders prior-step artifacts as grounded context in the prompt.
+- Strips markdown fences from the response, then JSON-parses; structured JSON is stored directly as artifact data. Falls back to `{ text: "..." }` if not valid JSON.
+- Derives artifact `name` from the kind identifier (e.g. `cam.domain.ubiquitous_language` → `"Ubiquitous Language"`).
 
 ---
 
@@ -372,7 +408,8 @@ Structured status events:
 | `run:failed` | `{ runId, error }` | Run terminated with error |
 | `run:cancelled` | `{ runId }` | Run cancelled by user |
 | `agent:ask_user` | `{ token, question, input_type, options? }` | Mid-run input request |
-| `agent:raw_artifact_uploaded` | `{ s3Key, downloadUrl, mimeType, filename }` | File uploaded to S3 |
+| `plan:awaiting_approval` | `{ token, steps: PlanStep[] }` | Plan assembled; execution suspended pending user approval |
+| `agent:raw_artifact_uploaded` | `{ artifact_id, filename, mime_type, kind }` | File-producing general skill artifact saved |
 | `agent:notification` | `{ text }` | Non-step narration from Claude |
 
 The renderer merges these streams: tokens render in the chat bubble; step events update the plan panel on the right. Step-level progress events are also published to `notification-service` for the workspace activity feed.
@@ -495,87 +532,46 @@ The answer sets `domain`, `is_artifact_skill`, and whether to prompt for `raw_ar
 
 ---
 
-## 14. Raw Artifact Storage — S3
+## 14. Raw Artifact Storage — JSON Artifact Endpoint
 
-### Workspace provisioning
-
-`workspace-manager-service` receives `platform.workspace.created` events from RabbitMQ. Its existing handler creates the MongoDB document in `workspace_artifacts`. It now also provisions S3 storage as a side effect of the same handler.
-
-**Storage model: one bucket, workspace_id as key prefix.**
-
-Creating one S3 bucket per workspace hits AWS's account-level bucket limits quickly. The correct model is a single shared bucket with workspace-scoped key prefixes:
-
-```
-s3://astra-raw-artifacts/
-  {workspace_id}/
-    {run_id}/
-      {timestamp}_{filename}
-```
-
-This gives the same tenancy isolation without bucket proliferation. IAM policies enforce prefix-scoped access per workspace. The `workspace_id` is the tenant key.
-
-### New endpoints on workspace-manager-service
-
-```
-POST   /raw-artifact/{workspaceId}           Upload a raw artifact (multipart or base64 body)
-GET    /raw-artifact/{workspaceId}           List raw artifacts for the workspace
-GET    /raw-artifact/{workspaceId}/{key}     Get pre-signed download URL for a specific artifact
-DELETE /raw-artifact/{workspaceId}/{key}     Soft-delete a raw artifact
-```
-
-Upload response:
-
-```typescript
-interface RawArtifactUploadResponse {
-  s3_key: string;
-  download_url: string;       // pre-signed, TTL configurable
-  workspace_id: string;
-  run_id: string;
-  mime_type: string;
-  filename: string;
-  size_bytes: number;
-  uploaded_at: string;
-}
-```
+> **Implementation note:** The original design (ADR-016) specified S3 storage via new `workspace-manager-service` endpoints. The actual `workspace-manager-service` has no S3/file upload endpoint — all artifacts are stored as JSON documents in MongoDB via `POST /artifact/{workspace_id}`. `RawArtifactUploader` was adapted accordingly.
 
 ### RawArtifactUploader in the agent
 
 ```typescript
 class RawArtifactUploader {
+  constructor(workspaceManagerClient: WorkspaceManagerClient, streamer: Streamer)
   async upload(
     workspaceId: string,
     runId: string,
-    envelope: RawArtifactEnvelope,
+    skill: SkillDocument,
     toolResult: unknown,
     signal: AbortSignal
-  ): Promise<RawArtifactUploadResponse>
+  ): Promise<void>
 }
 ```
 
-The uploader extracts the file payload from the MCP tool result per `envelope.content_type`:
+File payloads from general/file-producing skills are stored via the existing `POST /artifact/{workspaceId}` JSON endpoint. The `data` field carries `{ filename, mime_type, content }` where `content` is the raw base64 string extracted from the tool result. The `kind` is taken from `skill.produces_kinds[0]`.
 
-- `base64` — decodes the string field, constructs a multipart upload body.
-- `url` — fetches the URL and streams the response body to the upload endpoint.
+After successful upsert, emits `agent:raw_artifact_uploaded` via `Streamer`.
 
-The upload response is streamed to the renderer as an `agent:raw_artifact_uploaded` event, which renders a file card inline in the chat with a download button.
-
-### Event publishing
-
-When `workspace-manager-service` completes a raw artifact upload, it publishes:
+### Stored artifact shape (Branch B)
 
 ```json
 {
-  "routing_key": "{workspaceId}.workspace.raw_artifact.created",
-  "workspace_id": "{workspaceId}",
-  "run_id": "{runId}",
-  "s3_key": "...",
-  "mime_type": "...",
-  "filename": "...",
-  "size_bytes": 0
+  "kind": "<skill.produces_kinds[0]>",
+  "name": "<resolved filename from filename_template>",
+  "data": {
+    "filename": "...",
+    "mime_type": "...",
+    "content": "<base64 string>"
+  },
+  "skill_name": "...",
+  "run_id": "..."
 }
 ```
 
-The notification-service broadcasts it to the workspace WebSocket channel. The Electron app's activity feed shows the new file alongside ASTRA artifact events.
+No S3 provisioning, no new backend endpoints required. The S3 design from ADR-016 is deferred to a future backend sprint when `workspace-manager-service` gains file storage support.
 
 ---
 

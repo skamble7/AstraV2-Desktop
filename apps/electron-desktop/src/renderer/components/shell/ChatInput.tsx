@@ -13,6 +13,7 @@ import { useAppStore } from '../../store/index.js';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
+  conversationId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,8 +161,12 @@ function PlusMenu({ onClose }: { onClose: () => void }): React.ReactElement {
   );
 }
 
-export function ChatInput({ onSend }: ChatInputProps): React.ReactElement {
-  const isAgentStreaming = useAppStore((state) => state.isAgentStreaming);
+export function ChatInput({ onSend, conversationId }: ChatInputProps): React.ReactElement {
+  const isAgentStreaming = useAppStore((state) =>
+    conversationId
+      ? (state.conversationAgentState[conversationId]?.isStreaming ?? false)
+      : false
+  );
   const [value, setValue] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

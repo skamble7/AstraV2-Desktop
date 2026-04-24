@@ -35,8 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   runPack: (payload: AgentRunPackPayload): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.AGENT_RUN_PACK, payload),
 
-  cancelRun: (workspaceId: string): Promise<void> =>
-    ipcRenderer.invoke(IPC_CHANNELS.AGENT_CANCEL, { workspace_id: workspaceId }),
+  cancelRun: (workspaceId: string, conversationId: string): Promise<void> =>
+    ipcRenderer.invoke(IPC_CHANNELS.AGENT_CANCEL, { workspace_id: workspaceId, conversation_id: conversationId }),
 
   provideInput: (token: string, value: unknown): Promise<void> =>
     ipcRenderer.invoke(IPC_CHANNELS.AGENT_PROVIDE_INPUT, { token, value }),

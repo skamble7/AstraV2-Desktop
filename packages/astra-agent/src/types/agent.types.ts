@@ -3,6 +3,17 @@
  */
 
 import type Anthropic from '@anthropic-ai/sdk';
+import type { SessionClient } from '../http/clients/SessionClient.js';
+import type { SkillRegistryClient } from '../http/clients/SkillRegistryClient.js';
+import type { WorkspaceManagerClient } from '../http/clients/WorkspaceManagerClient.js';
+import type { ConfigForgeClient } from '../http/clients/ConfigForgeClient.js';
+import type { ArtifactRegistryClient } from '../http/clients/ArtifactRegistryClient.js';
+import type { LlmClientFactory } from '../http/clients/LlmClientFactory.js';
+import type { SkillManifestCache } from '../skills/SkillManifestCache.js';
+import type { SkillResolver } from '../skills/SkillResolver.js';
+import type { SkillToToolConverter } from '../skills/SkillToToolConverter.js';
+import type { ToolRegistry } from '../tools/ToolRegistry.js';
+import type { ArtifactPersister } from '../persistence/ArtifactPersister.js';
 
 export type RunMode = 'intent' | 'pack';
 
@@ -74,6 +85,29 @@ export interface AgentServiceConfig {
    * Example: "dev.llm.bedrock.explicit-creds"
    */
   plannerConfigRef: string;
+}
+
+/**
+ * Workspace-level shared resources created once per workspace and injected into
+ * every AgentController for that workspace. All fields are stateless or safely
+ * shared across concurrent conversations (e.g. HTTP clients, caches).
+ *
+ * Streamer and RawArtifactUploader are NOT included — they are per-conversation
+ * because Streamer is the event bus for a single run.
+ */
+export interface WorkspaceResources {
+  workspaceId: string;
+  sessionClient: SessionClient;
+  skillRegistryClient: SkillRegistryClient;
+  workspaceManagerClient: WorkspaceManagerClient;
+  configForgeClient: ConfigForgeClient;
+  artifactRegistryClient: ArtifactRegistryClient;
+  llmClientFactory: LlmClientFactory;
+  skillManifestCache: SkillManifestCache;
+  skillResolver: SkillResolver;
+  skillToToolConverter: SkillToToolConverter;
+  toolRegistry: ToolRegistry;
+  artifactPersister: ArtifactPersister;
 }
 
 /**

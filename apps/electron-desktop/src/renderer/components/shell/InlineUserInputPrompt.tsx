@@ -8,8 +8,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/index.js';
 
-export function InlineUserInputPrompt(): React.ReactElement | null {
-  const askUserRequest = useAppStore((state) => state.askUserRequest);
+interface InlineUserInputPromptProps {
+  conversationId: string | null;
+}
+
+export function InlineUserInputPrompt({ conversationId }: InlineUserInputPromptProps): React.ReactElement | null {
+  const askUserRequest = useAppStore((state) =>
+    conversationId
+      ? (state.conversationAgentState[conversationId]?.askUserRequest ?? null)
+      : null
+  );
   const submitUserInput = useAppStore((state) => state.submitUserInput);
 
   const [inputValue, setInputValue] = useState('');

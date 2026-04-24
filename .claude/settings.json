@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/sandeep/Documents/Projects/astra-mcp/servers/mcp-raina-arch-guidance-generator/**)",
+      "Bash(pnpm -r exec tsc --noEmit)"
+    ]
+  }
+}

@@ -1,16 +1,16 @@
 /**
- * AgentRegistry — holds one AgentController per workspace.
+ * AgentRegistry — holds one WorkspaceAgentContext per workspace.
  *
- * Enforces the one-run-per-workspace concurrency model: cancelling one workspace's
- * run has zero effect on other workspaces. Multiple workspaces can each have an
- * active run simultaneously.
+ * Each WorkspaceAgentContext manages shared workspace-level resources and a
+ * Map<conversationId, AgentController>. This enables multiple conversations
+ * within the same workspace to run agents concurrently and independently.
  */
 
-import { AgentController } from 'astra-agent';
+import { WorkspaceAgentContext } from 'astra-agent';
 import type { AgentServiceConfig } from 'astra-agent';
 
 export class AgentRegistry {
-  private readonly controllers = new Map<string, AgentController>();
+  private readonly contexts = new Map<string, WorkspaceAgentContext>();
   private readonly config: AgentServiceConfig;
 
   constructor(config: AgentServiceConfig) {
@@ -18,61 +18,72 @@ export class AgentRegistry {
   }
 
   /**
-   * Returns the AgentController for a workspace, creating one if it does not exist.
+   * Returns the WorkspaceAgentContext for a workspace, creating one if needed.
    */
-  getOrCreate(workspaceId: string): AgentController {
-    const existing = this.controllers.get(workspaceId);
-    if (existing) {
-      return existing;
-    }
+  private getOrCreateContext(workspaceId: string): WorkspaceAgentContext {
+    const existing = this.contexts.get(workspaceId);
+    if (existing) return existing;
 
-    const controller = new AgentController(workspaceId, this.config);
-    this.controllers.set(workspaceId, controller);
-    return controller;
+    const context = new WorkspaceAgentContext(workspaceId, this.config);
+    this.contexts.set(workspaceId, context);
+    return context;
   }
 
   /**
-   * Cancels the active run for a workspace. No-op if no run is in progress.
+   * Returns the AgentController for a specific conversation, creating it if needed.
    */
-  cancelRun(workspaceId: string): void {
-    this.controllers.get(workspaceId)?.cancel();
+  getOrCreateController(workspaceId: string, conversationId: string) {
+    return this.getOrCreateContext(workspaceId).getOrCreateController(conversationId);
   }
 
   /**
-   * Forwards a user input token to any active controller that is awaiting it.
-   * Tokens are unique UUIDs so at most one controller will respond.
+   * Cancels the active run for a specific conversation.
+   */
+  cancelRun(workspaceId: string, conversationId: string): void {
+    this.contexts.get(workspaceId)?.cancelConversation(conversationId);
+  }
+
+  /**
+   * Cancels and removes the controller for a conversation (e.g. on conversation delete).
+   */
+  removeConversation(workspaceId: string, conversationId: string): void {
+    this.contexts.get(workspaceId)?.removeController(conversationId);
+  }
+
+  /**
+   * Forwards a user input token to the controller awaiting it.
+   * Tokens are unique UUIDs — at most one controller across all workspaces will respond.
    */
   provideInputToActive(token: string, value: unknown): void {
-    for (const controller of this.controllers.values()) {
-      controller.provideUserInput(token, value);
+    for (const context of this.contexts.values()) {
+      context.forEachController((controller) => controller.provideUserInput(token, value));
     }
   }
 
   /**
-   * Resolves a pending plan approval. Tokens are unique UUIDs so at most one
-   * controller will respond.
+   * Resolves a pending plan approval. Tokens are unique UUIDs — at most one controller responds.
    */
   approvePlan(token: string, approved: boolean): void {
-    for (const controller of this.controllers.values()) {
-      controller.approvePlan(token, approved);
+    for (const context of this.contexts.values()) {
+      context.forEachController((controller) => controller.approvePlan(token, approved));
     }
   }
 
   /**
-   * Removes a controller when a workspace is closed/deleted.
+   * Disposes all controllers and resources for a workspace (e.g. on workspace close).
    */
   remove(workspaceId: string): void {
-    this.controllers.get(workspaceId)?.cancel();
-    this.controllers.delete(workspaceId);
+    this.contexts.get(workspaceId)?.dispose();
+    this.contexts.delete(workspaceId);
   }
 
   /**
-   * Invalidates the skill manifest cache for all controllers.
+   * Invalidates the skill manifest cache for all workspaces.
    * Called when notification-service broadcasts a skill.updated event.
    */
   invalidateAllSkillCaches(): void {
-    for (const controller of this.controllers.values()) {
-      controller.invalidateSkillCache();
+    for (const context of this.contexts.values()) {
+      context.invalidateSkillCache();
     }
   }
 }

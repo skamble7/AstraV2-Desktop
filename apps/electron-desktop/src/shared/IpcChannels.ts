@@ -72,6 +72,7 @@ export interface AgentRunPackPayload {
 
 export interface AgentCancelPayload {
   workspace_id: string;
+  conversation_id: string;
 }
 
 export interface AgentProvideInputPayload {
@@ -85,12 +86,14 @@ export interface WorkspaceCreatePayload {
   description?: string;
 }
 
-// main → renderer payloads
+// main → renderer payloads (all include conversation_id for per-conversation routing)
 export interface AgentTokenPayload {
+  conversation_id: string;
   delta: string;
 }
 
 export interface AgentPlanUpdatePayload {
+  conversation_id: string;
   type: 'step_added' | 'step_started' | 'step_completed' | 'step_failed';
   step_id?: string;
   step_index?: number;
@@ -99,6 +102,7 @@ export interface AgentPlanUpdatePayload {
 }
 
 export interface AgentAskUserPayload {
+  conversation_id: string;
   token: string;
   question: string;
   input_type: 'text' | 'url' | 'file_path' | 'select';
@@ -106,6 +110,7 @@ export interface AgentAskUserPayload {
 }
 
 export interface AgentPlanApprovalRequestPayload {
+  conversation_id: string;
   token: string;
   steps: import('astra-agent').PlanStep[];
 }
@@ -116,11 +121,13 @@ export interface AgentApprovePlanPayload {
 }
 
 export interface AgentRunCompletePayload {
+  conversation_id: string;
   run_id: string | null;
   cancelled?: boolean;
 }
 
 export interface AgentErrorPayload {
+  conversation_id: string;
   message: string;
   fatal: boolean;
 }

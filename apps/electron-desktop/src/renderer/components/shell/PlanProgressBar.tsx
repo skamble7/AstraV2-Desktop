@@ -6,7 +6,6 @@
  */
 
 import React from 'react';
-import { useAppStore } from '../../store/index.js';
 import type { PlanStep } from 'astra-agent';
 
 function StepIndicator({ step }: { step: PlanStep }): React.ReactElement {
@@ -71,8 +70,7 @@ function StepIndicator({ step }: { step: PlanStep }): React.ReactElement {
   );
 }
 
-export function PlanProgressBar(): React.ReactElement | null {
-  const planSteps = useAppStore((state) => state.currentPlanSteps);
+export function PlanProgressBar({ planSteps }: { planSteps: PlanStep[] }): React.ReactElement | null {
 
   if (planSteps.length === 0) return null;
 

@@ -151,7 +151,17 @@ export const createConversationSlice: StateCreator<ConversationSlice> = (set, ge
 
     deleteConversation: async (workspaceId, conversationId) => {
       const api = getApi();
+      // Cancel any in-progress run for this conversation before deleting (best-effort).
+      await api.cancelRun(workspaceId, conversationId).catch(() => { /* no-op */ });
       await api.deleteConversation(conversationId);
+      // Clean up per-conversation agent state (cross-slice write via set).
+      // get() returns the full merged store at runtime even though TypeScript only sees ConversationSlice.
+      set((state) => {
+        const fullState = state as ConversationSlice & { conversationAgentState?: Record<string, unknown> };
+        if (!fullState.conversationAgentState) return {};
+        const { [conversationId]: _removed, ...rest } = fullState.conversationAgentState;
+        return { conversationAgentState: rest } as Partial<ConversationSlice>;
+      });
       set((state) => {
         const remaining = (state.conversationsByWorkspace[workspaceId] ?? []).filter(
           (c) => c.conversation_id !== conversationId

@@ -27,10 +27,14 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
   const messages = useAppStore((state) =>
     conversationId ? (state.messagesByConversation[conversationId] ?? []) : []
   );
-  const isAgentStreaming = useAppStore((state) => state.isAgentStreaming);
+  const isStreaming = useAppStore((state) =>
+    conversationId
+      ? (state.conversationAgentState[conversationId]?.isStreaming ?? false)
+      : false
+  );
   const appendUserMessage = useAppStore((state) => state.appendUserMessage);
   const startAssistantMessage = useAppStore((state) => state.startAssistantMessage);
-  const setAgentStreaming = useAppStore((state) => state.setAgentStreaming);
+  const setConversationStreaming = useAppStore((state) => state.setConversationStreaming);
   const clearPlan = useAppStore((state) => state.clearPlan);
   const fetchMessages = useAppStore((state) => state.fetchMessages);
   const createConversation = useAppStore((state) => state.createConversation);
@@ -71,13 +75,13 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
 
     appendUserMessage(activeConvId, content);
     startAssistantMessage(activeConvId);
-    setAgentStreaming(true, activeConvId);
-    clearPlan();
+    setConversationStreaming(activeConvId, true);
+    clearPlan(activeConvId);
 
     void window.electronAPI.sendMessage({
       workspace_id: workspaceId,
       message: content,
-      session_id: activeConvId, // field name stays session_id for AgentIpcHandler compatibility
+      session_id: activeConvId,
     });
 
     // Auto-name the conversation from the first message — best-effort, errors ignored
@@ -94,20 +98,21 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
     if (!conversationId) return;
 
     startAssistantMessage(conversationId);
-    setAgentStreaming(true, conversationId);
-    clearPlan();
+    setConversationStreaming(conversationId, true);
+    clearPlan(conversationId);
 
     void window.electronAPI.runPack({
       workspace_id: workspaceId,
       pack_key: packKey,
       pack_version: packVersion,
       inputs: {},
-      session_id: conversationId, // field name stays session_id for AgentIpcHandler compatibility
+      session_id: conversationId,
     });
   };
 
   const handleCancel = (): void => {
-    void window.electronAPI.cancelRun(workspaceId);
+    if (!conversationId) return;
+    void window.electronAPI.cancelRun(workspaceId, conversationId);
   };
 
   return (
@@ -123,7 +128,7 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
       }}
     >
       {/* Skill Pack Dock */}
-      <SkillPackDock onRunPack={handleRunPack} />
+      <SkillPackDock onRunPack={handleRunPack} conversationId={conversationId} />
 
       {/* Message Thread */}
       <div
@@ -163,16 +168,16 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
 
       {/* Plan approval prompt — shown after planning, before execution */}
       <div style={{ padding: '0 12px' }}>
-        <PlanApprovalPrompt />
+        <PlanApprovalPrompt conversationId={conversationId} />
       </div>
 
       {/* ask_user inline prompt */}
       <div style={{ padding: '0 12px' }}>
-        <InlineUserInputPrompt />
+        <InlineUserInputPrompt conversationId={conversationId} />
       </div>
 
       {/* Cancel button (visible when streaming) */}
-      {isAgentStreaming && (
+      {isStreaming && (
         <div style={{ padding: '0 12px 6px 12px', display: 'flex', justifyContent: 'center' }}>
           <button
             onClick={handleCancel}
@@ -192,7 +197,7 @@ export function ChatPanel({ workspaceId, conversationId }: ChatPanelProps): Reac
       )}
 
       {/* Chat Input */}
-      <ChatInput onSend={handleSendMessage} />
+      <ChatInput onSend={handleSendMessage} conversationId={conversationId} />
     </div>
   );
 }
